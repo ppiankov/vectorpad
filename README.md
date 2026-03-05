@@ -1,6 +1,6 @@
 # vectorpad
 
-Context launch pad for AI-assisted reasoning.
+Vector launch pad for AI-assisted reasoning.
 
 ## What it is
 
