@@ -1,6 +1,6 @@
 # vectorpad
 
-Semantic-preserving editor for reasoning intent.
+Context launch pad for AI-assisted reasoning.
 
 ## What it is
 
