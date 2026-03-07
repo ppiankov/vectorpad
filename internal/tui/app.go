@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/stash"
 )
 
@@ -29,24 +30,29 @@ const (
 
 // AppModel is the top-level Bubbletea model for the three-panel TUI.
 type AppModel struct {
-	focus  panel
-	stash  stashPanel
-	editor editorPanel
-	risk   riskPanel
-	help   helpModel
-	store  *stash.Store
-	width  int
-	height int
+	focus    panel
+	stash    stashPanel
+	editor   editorPanel
+	risk     riskPanel
+	help     helpModel
+	store    *stash.Store
+	caps     detect.Capabilities
+	pwMode   detect.PastewatchMode
+	lastScan detect.ScanResult
+	width    int
+	height   int
 }
 
 // NewApp creates the application model. store may be nil if stash is unavailable.
-func NewApp(store *stash.Store) AppModel {
+func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	m := AppModel{
 		focus:  panelEditor,
 		stash:  newStashPanel(),
 		editor: newEditorPanel(),
 		risk:   newRiskPanel(),
 		store:  store,
+		caps:   caps,
+		pwMode: detect.ModeInspect,
 	}
 	m.editor.focus()
 	m.loadStash()
@@ -104,11 +110,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global editor actions (work from any panel).
 		if key.Matches(msg, keys.Copy) {
-			m.editor.copyAll()
+			m.copyWithScan()
 			return m, nil
 		}
 		if key.Matches(msg, keys.Launch) {
-			m.editor.copyAll()
+			m.copyWithScan()
 			if m.editor.copyStatus == copyCopied {
 				m.editor.copyMsg = "launched " + m.editor.copyMsg
 			}
@@ -239,6 +245,25 @@ func (m AppModel) columnWidths() (stashW, editorW, riskW int) {
 	return stashW, editorW, riskW
 }
 
+func (m *AppModel) copyWithScan() {
+	content := m.editor.value()
+	if content == "" {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "nothing to copy"
+		return
+	}
+
+	// Run pastewatch scan before copying.
+	m.lastScan = detect.ScanPayload(m.caps, m.pwMode, content)
+	if !m.lastScan.Clean {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "blocked: secrets detected (see risk panel)"
+		return
+	}
+
+	m.editor.copyAll()
+}
+
 func (m *AppModel) stashCurrentVector() {
 	if m.store == nil {
 		m.editor.copyStatus = copyError
@@ -334,7 +359,7 @@ func (m AppModel) View() string {
 
 	// Risk panel.
 	if riskW > 0 {
-		content := m.risk.View(m.focus == panelRisk)
+		content := m.risk.ViewWithCaps(m.caps, m.pwMode, m.lastScan)
 		border := panelBorderStyle(m.focus == panelRisk)
 		panels = append(panels, border.Width(riskW-2).Height(m.height-2).Render(content))
 	}

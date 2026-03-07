@@ -10,6 +10,7 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
+	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/tui"
@@ -84,7 +85,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 
 func runTUI(stderr io.Writer) int {
 	store, _ := stash.NewDefaultStore()
-	app := tui.NewApp(store)
+	caps := detect.Detect()
+	app := tui.NewApp(store, caps)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
