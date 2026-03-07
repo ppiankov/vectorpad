@@ -3,6 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/ppiankov/vectorpad/internal/tui"
 )
 
 var version = "dev"
@@ -12,5 +16,10 @@ func main() {
 		fmt.Println("vectorpad", version)
 		return
 	}
-	fmt.Println("vectorpad — semantic-preserving editor for reasoning intent")
+
+	p := tea.NewProgram(tui.NewSpike(), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 }
