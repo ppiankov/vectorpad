@@ -38,6 +38,13 @@ func TestCopyToClipboardRoundTrip(t *testing.T) {
 			t.Skip("pbcopy not available")
 		}
 	}
+	if runtime.GOOS == "linux" {
+		_, errSel := exec.LookPath("xsel")
+		_, errClip := exec.LookPath("xclip")
+		if errSel != nil && errClip != nil {
+			t.Skip("xsel/xclip not available")
+		}
+	}
 
 	payload := "line 1\nline 2 with special: <>&\"'\nline 3\n"
 	if err := copyToClipboard(payload); err != nil {
