@@ -36,6 +36,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 		}
 	}
 
+	// No subcommand: if stdin is a terminal, launch TUI; otherwise read pipe.
+	if f, ok := stdin.(*os.File); ok && isTerminal(f) {
+		return runTUI(stderr)
+	}
+
 	input, err := io.ReadAll(stdin)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: failed to read stdin: %v\n", err)
@@ -116,4 +121,12 @@ func runAdd(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	_, _ = fmt.Fprintf(stdout, "stashed %s\n", item.ID)
 	return 0
+}
+
+func isTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (info.Mode() & os.ModeCharDevice) != 0
 }

@@ -218,9 +218,14 @@ func (p editorPanel) View(focused bool) string {
 	switch p.copyStatus {
 	case copyCopied:
 		b.WriteString(styleSuccess.Render(p.copyMsg))
+		b.WriteString("\n")
 	case copyError:
 		b.WriteString(styleError.Render(p.copyMsg))
+		b.WriteString("\n")
 	}
+
+	// Hint bar
+	b.WriteString(styleDim.Render(" ctrl+y copy  ctrl+s stash  ctrl+l launch  ctrl+h help"))
 
 	return b.String()
 }
