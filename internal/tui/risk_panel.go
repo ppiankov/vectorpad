@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
+	"github.com/ppiankov/vectorpad/internal/detect"
 )
 
 type riskPanel struct {
@@ -26,6 +27,14 @@ func (p *riskPanel) analyze(text string) {
 }
 
 func (p riskPanel) View(_ bool) string {
+	return p.render(detect.Capabilities{}, detect.ModeInspect, detect.ScanResult{Clean: true})
+}
+
+func (p riskPanel) ViewWithCaps(caps detect.Capabilities, mode detect.PastewatchMode, scan detect.ScanResult) string {
+	return p.render(caps, mode, scan)
+}
+
+func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, scan detect.ScanResult) string {
 	var b strings.Builder
 
 	b.WriteString(stylePanelTitle.Render("RISK PANEL"))
@@ -34,6 +43,8 @@ func (p riskPanel) View(_ bool) string {
 	r := p.result
 	if r.InstructionWords == 0 {
 		b.WriteString(styleMuted.Render(" awaiting input"))
+		b.WriteString("\n\n")
+		p.renderPastewatchStatus(&b, caps, mode, scan)
 		return b.String()
 	}
 
@@ -67,6 +78,10 @@ func (p riskPanel) View(_ bool) string {
 		b.WriteString("\n")
 	}
 
+	// Clipboard scan result
+	b.WriteString("\n")
+	p.renderPastewatchStatus(&b, caps, mode, scan)
+
 	// Nudges
 	if len(p.nudges) > 0 {
 		b.WriteString("\n")
@@ -81,4 +96,31 @@ func (p riskPanel) View(_ bool) string {
 	}
 
 	return b.String()
+}
+
+func (p riskPanel) renderPastewatchStatus(b *strings.Builder, caps detect.Capabilities, mode detect.PastewatchMode, scan detect.ScanResult) {
+	label := detect.StatusLabel(caps, mode)
+	b.WriteString(styleMuted.Render(" pastewatch: "))
+
+	if !caps.Pastewatch {
+		b.WriteString(styleMuted.Render(label))
+		b.WriteString("\n")
+		return
+	}
+
+	b.WriteString(styleMuted.Render(label))
+	b.WriteString("\n")
+
+	// Show scan result if there was a scan.
+	if scan.Clean {
+		b.WriteString(styleSuccess.Render("  clipboard: ✓ clean"))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(styleError.Render("  clipboard: ⚠ secrets detected"))
+		b.WriteString("\n")
+		for _, finding := range scan.Findings {
+			b.WriteString(styleError.Render(fmt.Sprintf("    - %s", finding)))
+			b.WriteString("\n")
+		}
+	}
 }
