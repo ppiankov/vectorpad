@@ -58,6 +58,9 @@ var (
 			Foreground(colorAccent).
 			PaddingLeft(1)
 
+	styleDim = lipgloss.NewStyle().
+			Foreground(colorDim)
+
 	styleStashFresh  = lipgloss.NewStyle().Foreground(colorWhite)
 	styleStashRecent = lipgloss.NewStyle().Foreground(colorMuted)
 	styleStashAging  = lipgloss.NewStyle().Foreground(colorDim)
