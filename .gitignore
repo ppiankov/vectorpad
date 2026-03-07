@@ -1,0 +1,9 @@
+# Build artifacts
+vectorpad
+
+# Private agent files
+MEMORY.md
+docs/essay-notes.md
+docs/work-orders.md
+docs/context.txt
+.tokencontrol.lock
