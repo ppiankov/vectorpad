@@ -6,10 +6,13 @@ import (
 	"os"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/stash"
+	"github.com/ppiankov/vectorpad/internal/tui"
 	"github.com/ppiankov/vectorpad/internal/vector"
 )
 
@@ -27,6 +30,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return 0
 		case "add":
 			return runAdd(args[2:], stdout, stderr)
+		case "tui":
+			return runTUI(stderr)
 		}
 	}
 
@@ -74,6 +79,17 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	_, _ = fmt.Fprintln(stdout)
 	_, _ = fmt.Fprintln(stdout, "PREFLIGHT_JSON")
 	_, _ = fmt.Fprintln(stdout, jsonMetrics)
+	return 0
+}
+
+func runTUI(stderr io.Writer) int {
+	store, _ := stash.NewDefaultStore()
+	app := tui.NewApp(store)
+	p := tea.NewProgram(app, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
 	return 0
 }
 
