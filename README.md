@@ -25,9 +25,11 @@ The cleanup touched 18 repositories and replaced detailed documentation with sho
 
 Nothing malicious happened. The operator simply transmitted only a fraction of their intent.
 
-That's an ambiguous vector — operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
+That's an [ambiguous vector](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#glossary) — operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
 
 VectorPad exists to catch that moment before execution. A smoke detector for operator intent — not a judge, not a blocker. Just enough friction to ask: did you say everything you meant?
+
+![VectorPad TUI — case classification with locked constraints](assets/screen.png)
 
 ## What it is NOT
 
