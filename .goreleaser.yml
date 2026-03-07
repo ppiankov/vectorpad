@@ -1,0 +1,57 @@
+version: 2
+
+project_name: vectorpad
+
+before:
+  hooks:
+    - go mod download
+    - go mod verify
+
+builds:
+  - id: vectorpad
+    main: ./cmd/vectorpad/
+    binary: vectorpad
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: vectorpad-archive
+    ids:
+      - vectorpad
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+brews:
+  - ids:
+      - vectorpad-archive
+    repository:
+      owner: ppiankov
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/ppiankov/vectorpad"
+    description: "Pre-flight staging area for reasoning intent"
+    license: MIT
+    install: |
+      bin.install "vectorpad"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/vectorpad version")

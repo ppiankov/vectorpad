@@ -1,0 +1,29 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [0.2.0] - 2026-03-07
+
+### Added
+- File attachment pipeline: detect paths, classify by extension, preview, serialize for copy-out
+- Image protocol detection (iTerm2, kitty)
+- Object card rendering in editor panel
+- Paste interception: dragged files become attachment objects, not inline text
+- Excerpt configuration per attachment
+- Three serialization modes: path-only, excerpt, evidence
+
+## [0.1.0] - 2026-03-07
+
+### Added
+- Three-panel TUI: stash roster, vector editor, risk panel
+- Sentence classifier with 6 tags (CONSTRAINT, DECISION, TENTATIVE, QUESTION, SPECULATION, EXPLANATION)
+- Meaning drift detection on 6 axes
+- Pre-flight metrics: token weight, CPD, TTC, CDR projections
+- Ambiguity detection with blast radius, brevity ratio, vague verb flagging
+- Nudge protocol for ambiguous vectors
+- Stash persistence with Jaccard similarity clustering
+- Capability detection for pastewatch and contextspectre
+- Pastewatch integration: scan outbound payload before clipboard copy
+- CLI pipeline: stdin classification + preflight + ambiguity analysis
+- `vectorpad tui` — interactive three-panel interface
+- `vectorpad add` — quick-add ideas to stash from CLI
