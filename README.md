@@ -43,8 +43,8 @@ Deterministic classification over ML. Structural safety over probabilistic confi
 
 ## Status
 
-Early development. Private repository.
+Early development. v0.2.1. Public repository — `brew install ppiankov/tap/vectorpad`.
 
 ## License
 
-MIT
+[MIT](LICENSE)
