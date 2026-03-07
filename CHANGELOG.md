@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-03-08
+
+### Fixed
+- `vectorpad` now launches TUI by default (no need for `vectorpad tui`)
+- Added keybinding hint bar at bottom of editor panel
+- Clipboard test skips on Linux CI when xsel/xclip unavailable
+
 ## [0.2.0] - 2026-03-07
 
 ### Added
