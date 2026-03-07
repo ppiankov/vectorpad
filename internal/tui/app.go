@@ -246,14 +246,14 @@ func (m AppModel) columnWidths() (stashW, editorW, riskW int) {
 }
 
 func (m *AppModel) copyWithScan() {
-	content := m.editor.value()
+	content := m.editor.buildCopyPayload()
 	if content == "" {
 		m.editor.copyStatus = copyError
 		m.editor.copyMsg = "nothing to copy"
 		return
 	}
 
-	// Run pastewatch scan before copying.
+	// Run pastewatch scan on the full payload (text + serialized attachments).
 	m.lastScan = detect.ScanPayload(m.caps, m.pwMode, content)
 	if !m.lastScan.Clean {
 		m.editor.copyStatus = copyError
