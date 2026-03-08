@@ -9,6 +9,7 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/attach"
 	"github.com/ppiankov/vectorpad/internal/classifier"
+	"github.com/ppiankov/vectorpad/internal/decompose"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/pressure"
@@ -36,6 +37,7 @@ type editorPanel struct {
 	scopeDecl          scopedecl.Declaration
 	scopeResult        scopedecl.Result
 	pressureScores     []pressure.SentenceScore
+	decomposeResult    decompose.Result
 	attachments        []*attach.Attachment
 	attachCfgs         []attach.ExcerptConfig
 	copyStatus         copyStatus
@@ -128,6 +130,9 @@ func (p *editorPanel) reclassify() {
 
 	// Pressure scoring (uses ambiguity vague verbs if available).
 	p.pressureScores = pressure.Score(p.sentences, nil)
+
+	// Vector decomposition: suggest split when blast radius is high.
+	p.decomposeResult = decompose.Decompose(p.sentences, 3)
 
 	// Constraint pinning: detect removed constraints.
 	currentConstraints := extractConstraintTexts(p.sentences)

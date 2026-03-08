@@ -78,6 +78,7 @@ func (m *AppModel) syncRisk() {
 	m.risk.scopeResult = m.editor.scopeResult
 	// Recompute pressure with vague verbs from ambiguity analysis.
 	m.risk.pressureScores = pressure.Score(m.editor.sentences, m.risk.result.VagueVerbs)
+	m.risk.decomposeResult = m.editor.decomposeResult
 }
 
 func (m *AppModel) loadStash() {
@@ -150,6 +151,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, keys.Scope) {
 			m.scope.show()
+			return m, nil
+		}
+		if key.Matches(msg, keys.Decompose) {
+			m.decomposeIntoStash()
 			return m, nil
 		}
 		if key.Matches(msg, keys.Stash) {
@@ -362,6 +367,37 @@ func (m *AppModel) pruneSelectedStack() {
 	}
 	file.Stacks = stash.ClusterItems(kept, time.Now().UTC())
 	_ = m.store.Save(file)
+	m.loadStash()
+}
+
+func (m *AppModel) decomposeIntoStash() {
+	if !m.editor.decomposeResult.Triggered {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "nothing to decompose"
+		return
+	}
+	if m.store == nil {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "stash unavailable"
+		return
+	}
+
+	count := 0
+	for _, sv := range m.editor.decomposeResult.SubVectors {
+		if sv.Text == "" {
+			continue
+		}
+		_, err := m.store.Add(sv.Text, stash.SourcePaste)
+		if err != nil {
+			m.editor.copyStatus = copyError
+			m.editor.copyMsg = fmt.Sprintf("decompose stash failed: %v", err)
+			return
+		}
+		count++
+	}
+
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = fmt.Sprintf("decomposed into %d sub-vectors in stash", count)
 	m.loadStash()
 }
 

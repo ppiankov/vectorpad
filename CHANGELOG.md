@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-03-08
+
+### Added
+- Vector decomposition (`ctrl+b`): split high-blast-radius vectors into focused sub-vectors by target groups
+- Sub-vectors include shared preamble (constraints, context) plus group-specific sentences
+- Decompose suggestion in risk panel when 3+ distinct targets detected
+- Decompose output in CLI pipe mode (`DECOMPOSE` section)
+
 ## [0.6.0] - 2026-03-08
 
 ### Added

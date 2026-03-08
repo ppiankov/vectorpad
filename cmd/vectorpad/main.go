@@ -10,6 +10,7 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
+	"github.com/ppiankov/vectorpad/internal/decompose"
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
@@ -107,6 +108,16 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 				signals = " [" + strings.Join(ps.Signals, ", ") + "]"
 			}
 			_, _ = fmt.Fprintf(stdout, "  S%d: %s (%d)%s\n", i+1, level, ps.Score, signals)
+		}
+	}
+
+	// Vector decomposition.
+	decompResult := decompose.Decompose(sentences, 3)
+	if decompResult.Triggered {
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintf(stdout, "DECOMPOSE (%d sub-vectors)\n", len(decompResult.SubVectors))
+		for i, sv := range decompResult.SubVectors {
+			_, _ = fmt.Fprintf(stdout, "  %d. [%s] %d sentences\n", i+1, sv.Label, len(sv.Sentences))
 		}
 	}
 

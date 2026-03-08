@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
+	"github.com/ppiankov/vectorpad/internal/decompose"
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
@@ -22,6 +23,7 @@ type riskPanel struct {
 	removedConstraints []string
 	scopeResult        scopedecl.Result
 	pressureScores     []pressure.SentenceScore
+	decomposeResult    decompose.Result
 	width              int
 	height             int
 }
@@ -178,6 +180,25 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 			b.WriteString(styleMuted.Render(fmt.Sprintf("  %s", gap.Description)))
 			b.WriteString("\n")
 		}
+	}
+
+	// Vector decomposition suggestion
+	if p.decomposeResult.Triggered && len(p.decomposeResult.SubVectors) > 0 {
+		b.WriteString("\n")
+		b.WriteString(styleWarning.Render(" DECOMPOSE"))
+		b.WriteString("\n")
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  %d sub-vectors suggested:", len(p.decomposeResult.SubVectors))))
+		b.WriteString("\n")
+		for i, sv := range p.decomposeResult.SubVectors {
+			label := sv.Label
+			if len(label) > 30 {
+				label = label[:27] + "..."
+			}
+			b.WriteString(styleMuted.Render(fmt.Sprintf("  %d. %s (%d sentences)", i+1, label, len(sv.Sentences))))
+			b.WriteString("\n")
+		}
+		b.WriteString(styleDim.Render("  ctrl+b to split into stash"))
+		b.WriteString("\n")
 	}
 
 	// Clipboard scan result
