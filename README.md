@@ -47,7 +47,7 @@ VectorPad exists to catch that moment before execution. A smoke detector for ope
 
 ## Philosophy
 
-Bounded context + uncontrolled flow = reasoning collapse. That's the core equation from [tokendynamics](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#tokenomics).
+Bounded context + uncontrolled flow = reasoning collapse. That's the core equation from [tokendynamics](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md).
 
 VectorPad applies three principles:
 - **Deterministic classification over ML.** Every sentence gets a tag via regex and token matching. No probabilities, no embeddings, no model calls
@@ -96,7 +96,7 @@ Run `vectorpad` to open the three-panel interface. Paste or type your directive 
 echo "update all repos to have readme" | vectorpad
 ```
 
-Outputs classified vector block, pre-flight metrics (tokens, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd), [TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc), [CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr)), ambiguity analysis, and nudge prompts.
+Outputs classified vector block, pre-flight metrics (tokens, CPD, TTC, CDR), ambiguity analysis, and nudge prompts.
 
 ### Quick-add to stash
 
@@ -135,7 +135,7 @@ Drag a file into the terminal - VectorPad intercepts the path, classifies the fi
 | `classifier` | 6-tag sentence classification (CONSTRAINT, DECISION, TENTATIVE, QUESTION, SPECULATION, EXPLANATION) |
 | `drift` | Meaning drift detection on 6 axes (modality, negation, numeric, scope, conditional, commitment) |
 | `vector` | Vector block rendering - grouped, classified output |
-| `preflight` | Pre-flight metrics: token weight, vector integrity, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr) projections |
+| `preflight` | Pre-flight metrics: token weight, vector integrity, CPD/TTC/CDR projections |
 | `ambiguity` | Ambiguous vector detection: blast radius, brevity ratio, vague verbs, nudge protocol |
 | `stash` | Idea persistence with Jaccard similarity clustering and uniqueness scoring |
 | `negativespace` | Negative space detection: flag missing constraint classes in directives |
@@ -155,7 +155,15 @@ VectorPad is one half of a reasoning debugger. The other half is [ContextSpectre
 | VectorPad | Pre-flight - structure intent before sending | Setting breakpoints and inspecting variables |
 | ContextSpectre | Runtime - observe what happens inside the session | Watching the stack trace and stepping through execution |
 
-The feedback loop: VectorPad predicts [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr) - model executes - ContextSpectre measures actual metrics - operator adjusts the next vector.
+The feedback loop: VectorPad predicts CPD/TTC/CDR - model executes - ContextSpectre measures actual metrics - operator adjusts the next vector.
+
+| Metric | What it measures | Healthy | Degraded |
+|--------|-----------------|---------|----------|
+| CPD (Cost Per Decision) | Dollars spent per decision | $0-5 | $15+ |
+| TTC (Turns To Convergence) | Turns between decisions | <30 | 90+ |
+| CDR (Context Drift Rate) | Fraction of turns off-vector | <0.15 | 0.35+ |
+
+See the full [glossary](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md) for definitions.
 
 Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) scans outbound payloads for secrets before they enter a context window.
 
