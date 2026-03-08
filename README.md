@@ -96,7 +96,7 @@ Run `vectorpad` to open the three-panel interface. Paste or type your directive 
 echo "update all repos to have readme" | vectorpad
 ```
 
-Outputs classified vector block, pre-flight metrics (tokens, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md), [TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md), [CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md)), ambiguity analysis, and nudge prompts.
+Outputs classified vector block, pre-flight metrics (tokens, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd), [TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc), [CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr)), ambiguity analysis, and nudge prompts.
 
 ### Quick-add to stash
 
@@ -135,7 +135,7 @@ Drag a file into the terminal - VectorPad intercepts the path, classifies the fi
 | `classifier` | 6-tag sentence classification (CONSTRAINT, DECISION, TENTATIVE, QUESTION, SPECULATION, EXPLANATION) |
 | `drift` | Meaning drift detection on 6 axes (modality, negation, numeric, scope, conditional, commitment) |
 | `vector` | Vector block rendering - grouped, classified output |
-| `preflight` | Pre-flight metrics: token weight, vector integrity, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md) projections |
+| `preflight` | Pre-flight metrics: token weight, vector integrity, [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr) projections |
 | `ambiguity` | Ambiguous vector detection: blast radius, brevity ratio, vague verbs, nudge protocol |
 | `stash` | Idea persistence with Jaccard similarity clustering and uniqueness scoring |
 | `negativespace` | Negative space detection: flag missing constraint classes in directives |
@@ -155,7 +155,7 @@ VectorPad is one half of a reasoning debugger. The other half is [ContextSpectre
 | VectorPad | Pre-flight - structure intent before sending | Setting breakpoints and inspecting variables |
 | ContextSpectre | Runtime - observe what happens inside the session | Watching the stack trace and stepping through execution |
 
-The feedback loop: VectorPad predicts [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md) - model executes - ContextSpectre measures actual metrics - operator adjusts the next vector.
+The feedback loop: VectorPad predicts [CPD](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cpd)/[TTC](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#ttc)/[CDR](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#cdr) - model executes - ContextSpectre measures actual metrics - operator adjusts the next vector.
 
 Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) scans outbound payloads for secrets before they enter a context window.
 
