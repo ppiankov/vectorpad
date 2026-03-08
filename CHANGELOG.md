@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-03-08
+
+### Added
+- ContextSpectre feedback loop: risk panel shows session health grade, context pressure, turns remaining, model, and cost
+- Decision economics display: actual CPD/TTC/CDR from contextspectre stats with per-epoch breakdown
+- Feedback refreshes on TUI startup and after each launch event
+- Graceful degradation: feedback sections hidden when contextspectre is not installed
+
 ## [0.8.0] - 2026-03-08
 
 ### Added
