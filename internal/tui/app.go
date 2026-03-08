@@ -12,6 +12,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
 )
 
@@ -75,6 +76,8 @@ func (m *AppModel) syncRisk() {
 	m.risk.driftResult = m.editor.driftResult
 	m.risk.removedConstraints = m.editor.removedConstraints
 	m.risk.scopeResult = m.editor.scopeResult
+	// Recompute pressure with vague verbs from ambiguity analysis.
+	m.risk.pressureScores = pressure.Score(m.editor.sentences, m.risk.result.VagueVerbs)
 }
 
 func (m *AppModel) loadStash() {

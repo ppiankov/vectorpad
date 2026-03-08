@@ -14,6 +14,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
 	"github.com/ppiankov/vectorpad/internal/preflight"
+	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/tui"
 	"github.com/ppiankov/vectorpad/internal/vector"
@@ -86,6 +87,29 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			_, _ = fmt.Fprintf(stdout, "  - [%s] %s\n", nudge.Type, nudge.Prompt)
 		}
 	}
+	// Pressure heat map.
+	pressureScores := pressure.Score(sentences, ambiguityResult.VagueVerbs)
+	if len(pressureScores) > 0 {
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout, "PRESSURE")
+		for i, ps := range pressureScores {
+			var level string
+			switch ps.Level {
+			case pressure.LevelHigh:
+				level = "HIGH"
+			case pressure.LevelMedium:
+				level = "MED"
+			default:
+				level = "LOW"
+			}
+			signals := ""
+			if len(ps.Signals) > 0 {
+				signals = " [" + strings.Join(ps.Signals, ", ") + "]"
+			}
+			_, _ = fmt.Fprintf(stdout, "  S%d: %s (%d)%s\n", i+1, level, ps.Score, signals)
+		}
+	}
+
 	if !negSpace.Clean() {
 		_, _ = fmt.Fprintln(stdout)
 		_, _ = fmt.Fprintln(stdout, "GAPS (what you didn't say)")
