@@ -11,6 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/detect"
+	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/stash"
@@ -36,6 +37,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runTUI(stderr)
 		case "completion":
 			return runCompletion(args[2:], stdout, stderr)
+		case "log":
+			return runLog(args[2:], stdout, stderr)
 		}
 	}
 
@@ -135,6 +138,75 @@ func runAdd(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func runLog(args []string, stdout io.Writer, stderr io.Writer) int {
+	rec, err := flight.NewRecorder()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	// Parse flags.
+	if len(args) > 0 && args[0] == "--stats" {
+		stats, err := rec.ComputeStats()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout, "Total launches: %d\n", stats.TotalLaunches)
+		_, _ = fmt.Fprintf(stdout, "Annotated: %d\n", stats.Annotated)
+		for outcome, count := range stats.OutcomeCounts {
+			avg := stats.AvgCDRByOutcome[outcome]
+			_, _ = fmt.Fprintf(stdout, "  %s: %d (avg CDR: %.2f)\n", outcome, count, avg)
+		}
+		if len(stats.TopGaps) > 0 {
+			_, _ = fmt.Fprintln(stdout, "Top gaps:")
+			for _, g := range stats.TopGaps {
+				_, _ = fmt.Fprintf(stdout, "  %s: %d\n", g.Class, g.Count)
+			}
+		}
+		return 0
+	}
+
+	if len(args) >= 3 && args[0] == "--annotate" {
+		id := args[1]
+		outcome := args[2]
+		note := ""
+		if len(args) > 3 {
+			note = strings.Join(args[3:], " ")
+		}
+		if err := rec.Annotate(id, outcome, note); err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout, "annotated %s: %s\n", id, outcome)
+		return 0
+	}
+
+	// Default: show recent launches.
+	records, err := rec.Recent(10)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if len(records) == 0 {
+		_, _ = fmt.Fprintln(stdout, "no launches recorded yet")
+		return 0
+	}
+	for _, r := range records {
+		ts := r.Launched.Format("2006-01-02 15:04")
+		outcome := r.Outcome
+		if outcome == "" {
+			outcome = "-"
+		}
+		text := r.Text
+		if len(text) > 60 {
+			text = text[:57] + "..."
+		}
+		_, _ = fmt.Fprintf(stdout, "%s  %s  [%s] CDR:%.2f  %s\n", r.ID[:8], ts, outcome, r.Metrics.CDR, text)
+	}
+	return 0
+}
+
 func runCompletion(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: vectorpad completion <bash|zsh|fish>")
@@ -160,7 +232,7 @@ _vectorpad() {
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        COMPREPLY=($(compgen -W "tui add version completion" -- "${cur}"))
+        COMPREPLY=($(compgen -W "tui add version completion log" -- "${cur}"))
         return 0
     fi
 
@@ -183,6 +255,7 @@ _vectorpad() {
         'add:quick-add idea to stash'
         'version:print version'
         'completion:generate shell completions'
+        'log:view flight log'
     )
 
     _arguments -C \
@@ -212,6 +285,7 @@ complete -c vectorpad -n '__fish_use_subcommand' -a tui -d 'Launch interactive T
 complete -c vectorpad -n '__fish_use_subcommand' -a add -d 'Quick-add idea to stash'
 complete -c vectorpad -n '__fish_use_subcommand' -a version -d 'Print version'
 complete -c vectorpad -n '__fish_use_subcommand' -a completion -d 'Generate shell completions'
+complete -c vectorpad -n '__fish_use_subcommand' -a log -d 'View flight log'
 complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 `
 

@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ppiankov/vectorpad/internal/detect"
+	"github.com/ppiankov/vectorpad/internal/flight"
+	"github.com/ppiankov/vectorpad/internal/negativespace"
 	"github.com/ppiankov/vectorpad/internal/stash"
 )
 
@@ -38,6 +40,7 @@ type AppModel struct {
 	help     helpModel
 	launch   launchOverlay
 	store    *stash.Store
+	recorder *flight.Recorder
 	caps     detect.Capabilities
 	pwMode   detect.PastewatchMode
 	lastScan detect.ScanResult
@@ -47,15 +50,17 @@ type AppModel struct {
 
 // NewApp creates the application model. store may be nil if stash is unavailable.
 func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
+	rec, _ := flight.NewRecorder() // best-effort; nil recorder is fine
 	m := AppModel{
-		focus:  panelEditor,
-		stash:  newStashPanel(),
-		editor: newEditorPanel(),
-		risk:   newRiskPanel(),
-		launch: newLaunchOverlay(),
-		store:  store,
-		caps:   caps,
-		pwMode: detect.ModeInspect,
+		focus:    panelEditor,
+		stash:    newStashPanel(),
+		editor:   newEditorPanel(),
+		risk:     newRiskPanel(),
+		launch:   newLaunchOverlay(),
+		store:    store,
+		recorder: rec,
+		caps:     caps,
+		pwMode:   detect.ModeInspect,
 	}
 	m.editor.focus()
 	m.loadStash()
@@ -425,6 +430,28 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 	}
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
+
+	// Record the launch in the flight log.
+	if m.recorder != nil {
+		ns := negativespace.Analyze(payload)
+		var gapClasses []string
+		for _, g := range ns.Gaps {
+			gapClasses = append(gapClasses, string(g.Class))
+		}
+		_ = m.recorder.Append(flight.Record{
+			Target: t.name,
+			Text:   payload,
+			Metrics: flight.MetricsSnapshot{
+				Tokens:    m.editor.metrics.TokenWeight.Estimated,
+				Integrity: m.editor.metrics.VectorIntegrity.Ratio,
+				CPD:       m.editor.metrics.CPDProjection,
+				TTC:       m.editor.metrics.TTCProjection,
+				CDR:       m.editor.metrics.CDRProjection,
+			},
+			Gaps:       gapClasses,
+			VagueVerbs: m.risk.result.VagueVerbs,
+		})
+	}
 }
 
 func (m AppModel) View() string {
