@@ -170,8 +170,9 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 - [x] Phase 1 - classifier, drift, vector block, preflight, TUI shell
 - [x] Phase 2 - ambiguity detection, stash persistence, capability detection
 - [x] Phase 3 - file attachment pipeline (detect, classify, preview, serialize)
-- [ ] Phase 4 - launch targets, essence extraction, stash uniqueness visualization, shell completions
-- [ ] Phase 5 - contextspectre feedback loop (predicted vs actual metrics)
+- [x] Phase 4 - launch targets, essence extraction, stash uniqueness visualization, shell completions
+- [ ] Phase 5 - negative space detection, drift timeline in TUI, flight recorder, constraint pinning
+- [ ] Phase 6 - scope declaration, pressure heat map, vector decomposition, contextspectre feedback loop
 
 ## License
 

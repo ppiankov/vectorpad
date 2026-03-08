@@ -89,14 +89,6 @@ func (p *editorPanel) addAttachment(a *attach.Attachment) {
 	p.copyMsg = fmt.Sprintf("attached: %s %s", a.Label, a.Name)
 }
 
-func (p *editorPanel) removeAttachment(idx int) {
-	if idx < 0 || idx >= len(p.attachments) {
-		return
-	}
-	p.attachments = append(p.attachments[:idx], p.attachments[idx+1:]...)
-	p.attachCfgs = append(p.attachCfgs[:idx], p.attachCfgs[idx+1:]...)
-}
-
 // extractPastedText returns the text that was added between old and new values.
 func extractPastedText(old, new string) string {
 	if strings.HasPrefix(new, old) {
