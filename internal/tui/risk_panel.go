@@ -10,6 +10,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/scopedecl"
 )
 
 type riskPanel struct {
@@ -18,6 +19,7 @@ type riskPanel struct {
 	negSpace           negativespace.Result
 	driftResult        drift.Result
 	removedConstraints []string
+	scopeResult        scopedecl.Result
 	width              int
 	height             int
 }
@@ -129,6 +131,19 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 				text = text[:47] + "..."
 			}
 			b.WriteString(styleWarning.Render(fmt.Sprintf("  -%s", text)))
+			b.WriteString("\n")
+		}
+	}
+
+	// Scope declaration mismatches
+	if !p.scopeResult.Clean() {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("SCOPE"))
+		b.WriteString("\n")
+		for _, m := range p.scopeResult.Mismatches {
+			b.WriteString(styleWarning.Render(fmt.Sprintf("  [%s]", m.Type)))
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("  %s vs %s", m.Declared, m.Detected)))
 			b.WriteString("\n")
 		}
 	}

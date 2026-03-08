@@ -15,6 +15,7 @@ type keyMap struct {
 	Put     key.Binding
 	Prune   key.Binding
 	Essence key.Binding
+	Scope   key.Binding
 	Quit    key.Binding
 	Help    key.Binding
 }
@@ -67,6 +68,10 @@ var keys = keyMap{
 	Essence: key.NewBinding(
 		key.WithKeys("ctrl+e"),
 		key.WithHelp("ctrl+e", "essence"),
+	),
+	Scope: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "declare scope"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),

@@ -11,6 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/preflight"
+	"github.com/ppiankov/vectorpad/internal/scopedecl"
 	"github.com/ppiankov/vectorpad/internal/vector"
 )
 
@@ -31,6 +32,8 @@ type editorPanel struct {
 	baseline           string   // first non-empty text, used for drift comparison
 	prevConstraints    []string // constraint sentences from previous classification
 	removedConstraints []string // constraints that were removed since last classification
+	scopeDecl          scopedecl.Declaration
+	scopeResult        scopedecl.Result
 	attachments        []*attach.Attachment
 	attachCfgs         []attach.ExcerptConfig
 	copyStatus         copyStatus
@@ -136,10 +139,20 @@ func (p *editorPanel) reclassify() {
 	} else {
 		p.driftResult = drift.Result{Allowed: true}
 	}
+
+	// Cross-reference scope declaration against current text.
+	if !p.scopeDecl.Empty() {
+		p.scopeResult = scopedecl.CrossReference(p.scopeDecl, content)
+	}
 }
 
 func (p *editorPanel) value() string {
 	return p.textarea.Value()
+}
+
+func (p *editorPanel) setScope(block string) {
+	p.scopeDecl = scopedecl.Parse(block)
+	p.scopeResult = scopedecl.CrossReference(p.scopeDecl, p.textarea.Value())
 }
 
 func (p *editorPanel) setValue(text string) {
@@ -193,6 +206,23 @@ func (p editorPanel) View(focused bool) string {
 
 	b.WriteString(stylePanelTitle.Render("VECTOR EDITOR"))
 	b.WriteString("\n")
+
+	// Scope declaration bar (if set)
+	if !p.scopeDecl.Empty() {
+		var parts []string
+		if p.scopeDecl.Repos > 0 {
+			parts = append(parts, fmt.Sprintf("%d repos", p.scopeDecl.Repos))
+		}
+		if p.scopeDecl.Operation != "" {
+			parts = append(parts, p.scopeDecl.Operation)
+		}
+		if len(p.scopeDecl.Targets) > 0 {
+			parts = append(parts, strings.Join(p.scopeDecl.Targets, ", "))
+		}
+		b.WriteString(styleLocked.Render(" SCOPE: " + strings.Join(parts, " | ")))
+		b.WriteString("\n")
+	}
+
 	b.WriteString(p.textarea.View())
 	b.WriteString("\n")
 
@@ -246,7 +276,7 @@ func (p editorPanel) View(focused bool) string {
 	}
 
 	// Hint bar
-	b.WriteString(styleDim.Render(" ctrl+y copy  ctrl+s stash  ctrl+l launch  ctrl+h help"))
+	b.WriteString(styleDim.Render(" ctrl+y copy  ctrl+s stash  ctrl+l launch  ctrl+d scope  ctrl+h help"))
 
 	return b.String()
 }

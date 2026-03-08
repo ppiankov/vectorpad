@@ -39,6 +39,7 @@ type AppModel struct {
 	risk     riskPanel
 	help     helpModel
 	launch   launchOverlay
+	scope    scopeOverlay
 	store    *stash.Store
 	recorder *flight.Recorder
 	caps     detect.Capabilities
@@ -57,6 +58,7 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 		editor:   newEditorPanel(),
 		risk:     newRiskPanel(),
 		launch:   newLaunchOverlay(),
+		scope:    newScopeOverlay(),
 		store:    store,
 		recorder: rec,
 		caps:     caps,
@@ -72,6 +74,7 @@ func (m *AppModel) syncRisk() {
 	m.risk.analyzeText(m.editor.value())
 	m.risk.driftResult = m.editor.driftResult
 	m.risk.removedConstraints = m.editor.removedConstraints
+	m.risk.scopeResult = m.editor.scopeResult
 }
 
 func (m *AppModel) loadStash() {
@@ -111,6 +114,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLaunchKeys(msg)
 		}
 
+		// Scope overlay intercepts keys when visible.
+		if m.scope.visible {
+			return m.updateScopeKeys(msg)
+		}
+
 		// Global keys.
 		if key.Matches(msg, keys.Quit) {
 			return m, tea.Quit
@@ -135,6 +143,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, keys.Launch) {
 			m.launch.show()
+			return m, nil
+		}
+		if key.Matches(msg, keys.Scope) {
+			m.scope.show()
 			return m, nil
 		}
 		if key.Matches(msg, keys.Stash) {
@@ -401,6 +413,23 @@ func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *AppModel) updateScopeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.scope.dismiss()
+		return m, nil
+	case "ctrl+d":
+		// Apply scope and dismiss.
+		m.editor.setScope(m.scope.value())
+		m.syncRisk()
+		m.scope.dismiss()
+		return m, nil
+	}
+	// Pass through to scope textarea.
+	cmd := m.scope.update(msg)
+	return m, cmd
+}
+
 func (m *AppModel) executeLaunch(t *launchTarget) {
 	if !t.available {
 		m.editor.copyStatus = copyError
@@ -467,6 +496,9 @@ func (m AppModel) View() string {
 	if m.launch.visible {
 		m.launch.targets = newLaunchOverlay().targets // refresh availability
 		return renderCenteredOverlay(m.launch.View(), m.width, m.height)
+	}
+	if m.scope.visible {
+		return m.scope.view(m.width, m.height)
 	}
 
 	stashW, editorW, riskW := m.columnWidths()
