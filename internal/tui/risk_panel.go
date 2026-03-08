@@ -13,12 +13,13 @@ import (
 )
 
 type riskPanel struct {
-	result      ambiguity.Result
-	nudges      []ambiguity.Nudge
-	negSpace    negativespace.Result
-	driftResult drift.Result
-	width       int
-	height      int
+	result             ambiguity.Result
+	nudges             []ambiguity.Nudge
+	negSpace           negativespace.Result
+	driftResult        drift.Result
+	removedConstraints []string
+	width              int
+	height             int
 }
 
 func newRiskPanel() riskPanel {
@@ -102,6 +103,21 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 				b.WriteString(styleWarning.Render(fmt.Sprintf("  -%s: %s", d.Axis, r)))
 				b.WriteString("\n")
 			}
+		}
+	}
+
+	// Constraint pinning — warn on removed constraints
+	if len(p.removedConstraints) > 0 {
+		b.WriteString("\n")
+		b.WriteString(styleError.Render(" CONSTRAINT REMOVED"))
+		b.WriteString("\n")
+		for _, c := range p.removedConstraints {
+			text := c
+			if len(text) > 50 {
+				text = text[:47] + "..."
+			}
+			b.WriteString(styleWarning.Render(fmt.Sprintf("  -%s", text)))
+			b.WriteString("\n")
 		}
 	}
 
