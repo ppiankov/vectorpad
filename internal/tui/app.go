@@ -62,6 +62,12 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	return m
 }
 
+// syncRisk updates risk panel analysis including drift from editor baseline.
+func (m *AppModel) syncRisk() {
+	m.risk.analyzeText(m.editor.value())
+	m.risk.driftResult = m.editor.driftResult
+}
+
 func (m *AppModel) loadStash() {
 	if m.store == nil {
 		return
@@ -146,7 +152,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Delegate to editor for text input when focused.
 	if m.focus == panelEditor {
 		cmd := m.editor.update(msg)
-		m.risk.analyze(m.editor.value())
+		m.syncRisk()
 		return m, cmd
 	}
 
@@ -176,7 +182,7 @@ func (m *AppModel) updateStashKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *AppModel) updateEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Editor gets all remaining keys as text input.
 	cmd := m.editor.update(msg)
-	m.risk.analyze(m.editor.value())
+	m.syncRisk()
 	return m, cmd
 }
 
@@ -304,7 +310,7 @@ func (m *AppModel) recallFromStash() {
 	// Recall the latest item from selected stack.
 	latest := stack.Items[len(stack.Items)-1]
 	m.editor.setValue(latest.Text)
-	m.risk.analyze(m.editor.value())
+	m.syncRisk()
 	m.setFocus(panelEditor)
 }
 
@@ -354,7 +360,7 @@ func (m *AppModel) extractEssence() {
 	}
 
 	m.editor.setValue(essence)
-	m.risk.analyze(m.editor.value())
+	m.syncRisk()
 	m.setFocus(panelEditor)
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("essence from %q (%d items)", stack.Label, len(stack.Items))
