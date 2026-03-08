@@ -95,6 +95,7 @@ func appHelp() []helpEntry {
 		{"Ctrl+L", "Launch (copy + mark sent)"},
 		{"Ctrl+S", "Stash current vector"},
 		{"Ctrl+R", "Recall stash into editor"},
+		{"Ctrl+E", "Extract essence from stash"},
 		{"Ctrl+K", "Yank from stash"},
 		{"Ctrl+P", "Put yanked into editor"},
 		{"Ctrl+X", "Prune stash entry"},

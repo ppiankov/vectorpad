@@ -166,6 +166,10 @@ func (m *AppModel) updateStashKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pruneSelectedStack()
 		return m, nil
 	}
+	if key.Matches(msg, keys.Essence) {
+		m.extractEssence()
+		return m, nil
+	}
 	return m, nil
 }
 
@@ -332,6 +336,28 @@ func (m *AppModel) pruneSelectedStack() {
 	file.Stacks = stash.ClusterItems(kept, time.Now().UTC())
 	_ = m.store.Save(file)
 	m.loadStash()
+}
+
+func (m *AppModel) extractEssence() {
+	stack := m.stash.selectedStack()
+	if stack == nil || len(stack.Items) == 0 {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "no stash stack selected"
+		return
+	}
+
+	essence := stash.ExtractEssence(*stack)
+	if essence == "" {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "empty essence"
+		return
+	}
+
+	m.editor.setValue(essence)
+	m.risk.analyze(m.editor.value())
+	m.setFocus(panelEditor)
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = fmt.Sprintf("essence from %q (%d items)", stack.Label, len(stack.Items))
 }
 
 func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
