@@ -47,7 +47,7 @@ VectorPad exists to catch that moment before execution. A smoke detector for ope
 
 ## Philosophy
 
-Bounded context + uncontrolled flow = reasoning collapse. That's the core equation from [tokendynamics](https://github.com/ppiankov/contextspectre).
+Bounded context + uncontrolled flow = reasoning collapse. That's the core equation from [tokendynamics](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#tokenomics).
 
 VectorPad applies three principles:
 - **Deterministic classification over ML.** Every sentence gets a tag via regex and token matching. No probabilities, no embeddings, no model calls
