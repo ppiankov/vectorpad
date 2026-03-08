@@ -68,6 +68,9 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	}
 	m.editor.focus()
 	m.loadStash()
+	// Load contextspectre feedback on startup (nil if unavailable).
+	m.risk.feedback = detect.ReadFeedback(caps)
+	m.risk.decisionEcon = detect.ReadDecisionEconomics(caps)
 	return m
 }
 
@@ -80,6 +83,12 @@ func (m *AppModel) syncRisk() {
 	// Recompute pressure with vague verbs from ambiguity analysis.
 	m.risk.pressureScores = pressure.Score(m.editor.sentences, m.risk.result.VagueVerbs)
 	m.risk.decomposeResult = m.editor.decomposeResult
+}
+
+// refreshFeedback reads contextspectre telemetry and updates the risk panel.
+func (m *AppModel) refreshFeedback() {
+	m.risk.feedback = detect.ReadFeedback(m.caps)
+	m.risk.decisionEcon = detect.ReadDecisionEconomics(m.caps)
 }
 
 func (m *AppModel) loadStash() {
@@ -500,6 +509,9 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 	}
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
+
+	// Refresh contextspectre feedback after launch.
+	m.refreshFeedback()
 
 	// Record the launch in the flight log.
 	if m.recorder != nil {

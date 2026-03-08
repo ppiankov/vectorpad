@@ -24,6 +24,8 @@ type riskPanel struct {
 	scopeResult        scopedecl.Result
 	pressureScores     []pressure.SentenceScore
 	decomposeResult    decompose.Result
+	feedback           *detect.Feedback
+	decisionEcon       *detect.DecisionEcon
 	width              int
 	height             int
 }
@@ -199,6 +201,45 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 		b.WriteString(styleDim.Render("  ctrl+b to split into stash"))
 		b.WriteString("\n")
+	}
+
+	// ContextSpectre feedback
+	if p.feedback != nil {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("FEEDBACK"))
+		b.WriteString("\n")
+		gradeStyle := styleSuccess
+		if !p.feedback.ChainHealthy {
+			gradeStyle = styleError
+		}
+		b.WriteString(gradeStyle.Render(fmt.Sprintf("  grade: %s", p.feedback.Grade)))
+		b.WriteString("\n")
+		ctxStyle := styleMuted
+		if p.feedback.ContextPercent > 75 {
+			ctxStyle = styleError
+		} else if p.feedback.ContextPercent > 50 {
+			ctxStyle = styleWarning
+		}
+		b.WriteString(ctxStyle.Render(fmt.Sprintf("  context: %.0f%% (%d turns left)", p.feedback.ContextPercent, p.feedback.TurnsRemaining)))
+		b.WriteString("\n")
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  model: %s  cost: $%.2f", p.feedback.Model, p.feedback.TotalCost)))
+		b.WriteString("\n")
+	}
+
+	// Decision economics — predicted vs actual
+	if p.decisionEcon != nil {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("DECISION ECON"))
+		b.WriteString("\n")
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  actual CPD: $%.4f  TTC: %d  CDR: %.3f", p.decisionEcon.CPD, p.decisionEcon.TTC, p.decisionEcon.CDR)))
+		b.WriteString("\n")
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  decisions: %d", p.decisionEcon.TotalDecisions)))
+		b.WriteString("\n")
+		if len(p.decisionEcon.PerEpoch) > 0 {
+			latest := p.decisionEcon.PerEpoch[len(p.decisionEcon.PerEpoch)-1]
+			b.WriteString(styleDim.Render(fmt.Sprintf("  epoch %d: CPD $%.4f TTC %d CDR %.3f", latest.Epoch, latest.CPD, latest.TTC, latest.CDR)))
+			b.WriteString("\n")
+		}
 	}
 
 	// Clipboard scan result
