@@ -57,7 +57,19 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 	// Blast radius
 	b.WriteString(styleMuted.Render(" blast radius"))
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  repos: %d  files: %d\n", r.BlastRadius.Repos, r.BlastRadius.Files))
+	if r.BlastRadius.Targets > 0 {
+		b.WriteString(fmt.Sprintf("  targets: %d", r.BlastRadius.Targets))
+		if r.BlastRadius.Repos > 0 {
+			b.WriteString(fmt.Sprintf("  repos: %d", r.BlastRadius.Repos))
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("  (none detected)\n")
+	}
+	if len(r.BlastRadius.ScopeMarkers) > 0 {
+		b.WriteString(styleWarning.Render(fmt.Sprintf("  scope: %s", strings.Join(r.BlastRadius.ScopeMarkers, ", "))))
+		b.WriteString("\n")
+	}
 
 	// Brevity ratio
 	b.WriteString(styleMuted.Render(" brevity ratio"))
