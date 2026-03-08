@@ -138,6 +138,8 @@ Drag a file into the terminal - VectorPad intercepts the path, classifies the fi
 | `preflight` | Pre-flight metrics: token weight, vector integrity, CPD/TTC/CDR projections |
 | `ambiguity` | Ambiguous vector detection: blast radius, brevity ratio, vague verbs, nudge protocol |
 | `stash` | Idea persistence with Jaccard similarity clustering and uniqueness scoring |
+| `negativespace` | Negative space detection: flag missing constraint classes in directives |
+| `flight` | Flight recorder: append-only launch log with metrics and outcome annotation |
 | `detect` | Capability detection for pastewatch and contextspectre binaries |
 | `attach` | File attachment pipeline: detect path, classify, preview, serialize |
 | `tui` | Three-panel Bubbletea interface with responsive breakpoints |
