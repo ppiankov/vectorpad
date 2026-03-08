@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-03-08
+
+### Added
+- Pressure heat map: per-sentence risk scoring based on lock policy, classification tag, vague verb presence, and brevity
+- Three pressure levels (LOW/MED/HIGH) with visual bar in risk panel
+- Pressure output in CLI pipe mode (`PRESSURE` section)
+
 ## [0.4.1] - 2026-03-08
 
 ### Fixed

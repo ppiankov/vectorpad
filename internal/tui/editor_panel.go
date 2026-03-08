@@ -11,6 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/preflight"
+	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/scopedecl"
 	"github.com/ppiankov/vectorpad/internal/vector"
 )
@@ -34,6 +35,7 @@ type editorPanel struct {
 	removedConstraints []string // constraints that were removed since last classification
 	scopeDecl          scopedecl.Declaration
 	scopeResult        scopedecl.Result
+	pressureScores     []pressure.SentenceScore
 	attachments        []*attach.Attachment
 	attachCfgs         []attach.ExcerptConfig
 	copyStatus         copyStatus
@@ -123,6 +125,9 @@ func (p *editorPanel) reclassify() {
 	p.sentences = classifier.Classify(content)
 	p.vectorBlock = vector.Render(p.sentences)
 	p.metrics = preflight.Compute(content, p.sentences)
+
+	// Pressure scoring (uses ambiguity vague verbs if available).
+	p.pressureScores = pressure.Score(p.sentences, nil)
 
 	// Constraint pinning: detect removed constraints.
 	currentConstraints := extractConstraintTexts(p.sentences)

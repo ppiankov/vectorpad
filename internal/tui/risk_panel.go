@@ -10,6 +10,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/scopedecl"
 )
 
@@ -20,6 +21,7 @@ type riskPanel struct {
 	driftResult        drift.Result
 	removedConstraints []string
 	scopeResult        scopedecl.Result
+	pressureScores     []pressure.SentenceScore
 	width              int
 	height             int
 }
@@ -96,6 +98,23 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 	} else {
 		b.WriteString(styleSuccess.Render(" ✓ no warning"))
 		b.WriteString("\n")
+	}
+
+	// Pressure heat map — per-sentence risk
+	if len(p.pressureScores) > 0 {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("PRESSURE"))
+		b.WriteString("\n")
+		maxShow := 8
+		for i, ps := range p.pressureScores {
+			if i >= maxShow {
+				b.WriteString(styleMuted.Render(fmt.Sprintf("  ... +%d more", len(p.pressureScores)-maxShow)))
+				b.WriteString("\n")
+				break
+			}
+			b.WriteString(renderPressureBar(ps))
+			b.WriteString("\n")
+		}
 	}
 
 	// Meaning drift from baseline
@@ -206,6 +225,31 @@ func (p riskPanel) renderPastewatchStatus(b *strings.Builder, caps detect.Capabi
 			b.WriteString("\n")
 		}
 	}
+}
+
+func renderPressureBar(ps pressure.SentenceScore) string {
+	// Visual bar: green for low, amber for medium, red for high.
+	barLen := ps.Score / 10
+	if barLen < 1 && ps.Score > 0 {
+		barLen = 1
+	}
+	bar := strings.Repeat("█", barLen) + strings.Repeat("░", 10-barLen)
+
+	var s lipgloss.Style
+	switch ps.Level {
+	case pressure.LevelHigh:
+		s = styleError
+	case pressure.LevelMedium:
+		s = styleWarning
+	default:
+		s = styleSuccess
+	}
+
+	signals := ""
+	if len(ps.Signals) > 0 {
+		signals = " " + strings.Join(ps.Signals, ", ")
+	}
+	return s.Render(fmt.Sprintf("  %s %3d%s", bar, ps.Score, signals))
 }
 
 func describeDriftChange(axis drift.Axis, c drift.TokenChange) string {
