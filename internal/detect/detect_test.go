@@ -32,8 +32,10 @@ func TestDetectFindsInstalledBinaries(t *testing.T) {
 
 func TestDetectPastewatchMatchesLookPath(t *testing.T) {
 	caps := Detect()
-	_, err := exec.LookPath("pastewatch")
-	expected := err == nil
+	// Detect() checks both pastewatch-cli and pastewatch, so mirror that logic.
+	_, err1 := exec.LookPath("pastewatch-cli")
+	_, err2 := exec.LookPath("pastewatch")
+	expected := err1 == nil || err2 == nil
 	if caps.Pastewatch != expected {
 		t.Errorf("Pastewatch detection mismatch: got %v, LookPath says %v", caps.Pastewatch, expected)
 	}
