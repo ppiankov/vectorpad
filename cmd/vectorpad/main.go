@@ -11,6 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/detect"
+	"github.com/ppiankov/vectorpad/internal/negativespace"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/tui"
@@ -68,6 +69,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	}
 
 	nudges := ambiguity.SelectNudges(ambiguityResult)
+	negSpace := negativespace.Analyze(string(input))
 
 	_, _ = fmt.Fprintln(stdout, block)
 	_, _ = fmt.Fprintln(stdout)
@@ -79,6 +81,14 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 		_, _ = fmt.Fprintln(stdout, "NUDGES")
 		for _, nudge := range nudges {
 			_, _ = fmt.Fprintf(stdout, "  - [%s] %s\n", nudge.Type, nudge.Prompt)
+		}
+	}
+	if !negSpace.Clean() {
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout, "GAPS (what you didn't say)")
+		for _, gap := range negSpace.Gaps {
+			_, _ = fmt.Fprintf(stdout, "  [%s] %s\n", gap.Class, gap.Description)
+			_, _ = fmt.Fprintf(stdout, "    → %s\n", gap.NudgePrompt)
 		}
 	}
 	_, _ = fmt.Fprintln(stdout)
