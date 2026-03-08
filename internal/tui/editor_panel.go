@@ -9,6 +9,7 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/attach"
 	"github.com/ppiankov/vectorpad/internal/classifier"
+	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/vector"
 )
@@ -26,6 +27,8 @@ type editorPanel struct {
 	sentences   []classifier.Sentence
 	vectorBlock string
 	metrics     preflight.Metrics
+	driftResult drift.Result
+	baseline    string // first non-empty text, used for drift comparison
 	attachments []*attach.Attachment
 	attachCfgs  []attach.ExcerptConfig
 	copyStatus  copyStatus
@@ -103,11 +106,25 @@ func (p *editorPanel) reclassify() {
 		p.sentences = nil
 		p.vectorBlock = ""
 		p.metrics = preflight.Metrics{}
+		p.driftResult = drift.Result{Allowed: true}
 		return
 	}
+
+	// Capture baseline on first non-empty content.
+	if p.baseline == "" {
+		p.baseline = content
+	}
+
 	p.sentences = classifier.Classify(content)
 	p.vectorBlock = vector.Render(p.sentences)
 	p.metrics = preflight.Compute(content, p.sentences)
+
+	// Compare current text against baseline for meaning drift.
+	if p.baseline != "" && content != p.baseline {
+		p.driftResult = drift.Detect(p.baseline, content)
+	} else {
+		p.driftResult = drift.Result{Allowed: true}
+	}
 }
 
 func (p *editorPanel) value() string {
@@ -115,6 +132,7 @@ func (p *editorPanel) value() string {
 }
 
 func (p *editorPanel) setValue(text string) {
+	p.baseline = "" // reset baseline on recall/load — new editing session
 	p.textarea.SetValue(text)
 	p.reclassify()
 }

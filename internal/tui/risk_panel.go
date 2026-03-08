@@ -8,22 +8,24 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/detect"
+	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
 )
 
 type riskPanel struct {
-	result   ambiguity.Result
-	nudges   []ambiguity.Nudge
-	negSpace negativespace.Result
-	width    int
-	height   int
+	result      ambiguity.Result
+	nudges      []ambiguity.Nudge
+	negSpace    negativespace.Result
+	driftResult drift.Result
+	width       int
+	height      int
 }
 
 func newRiskPanel() riskPanel {
 	return riskPanel{}
 }
 
-func (p *riskPanel) analyze(text string) {
+func (p *riskPanel) analyzeText(text string) {
 	p.result = ambiguity.Analyze(text, ambiguity.Scope{})
 	p.nudges = ambiguity.SelectNudges(p.result)
 	p.negSpace = negativespace.Analyze(text)
@@ -79,6 +81,28 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 	} else {
 		b.WriteString(styleSuccess.Render(" ✓ no warning"))
 		b.WriteString("\n")
+	}
+
+	// Meaning drift from baseline
+	if !p.driftResult.Allowed && len(p.driftResult.Drifts) > 0 {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("DRIFT"))
+		b.WriteString("\n")
+		for _, d := range p.driftResult.Drifts {
+			for _, c := range d.Changed {
+				label := describeDriftChange(d.Axis, c)
+				b.WriteString(styleWarning.Render("  " + label))
+				b.WriteString("\n")
+			}
+			for _, a := range d.Added {
+				b.WriteString(styleMuted.Render(fmt.Sprintf("  +%s: %s", d.Axis, a)))
+				b.WriteString("\n")
+			}
+			for _, r := range d.Removed {
+				b.WriteString(styleWarning.Render(fmt.Sprintf("  -%s: %s", d.Axis, r)))
+				b.WriteString("\n")
+			}
+		}
 	}
 
 	// Negative space — missing constraint classes
@@ -138,5 +162,18 @@ func (p riskPanel) renderPastewatchStatus(b *strings.Builder, caps detect.Capabi
 			b.WriteString(styleError.Render(fmt.Sprintf("    - %s", finding)))
 			b.WriteString("\n")
 		}
+	}
+}
+
+func describeDriftChange(axis drift.Axis, c drift.TokenChange) string {
+	switch c.Kind {
+	case "upgrade":
+		return fmt.Sprintf("%s: strengthened '%s' → '%s'", axis, c.From, c.To)
+	case "downgrade":
+		return fmt.Sprintf("%s: weakened '%s' → '%s'", axis, c.From, c.To)
+	case "polarity_flip":
+		return fmt.Sprintf("%s: flipped %s → %s", axis, c.From, c.To)
+	default:
+		return fmt.Sprintf("%s: changed '%s' → '%s'", axis, c.From, c.To)
 	}
 }
