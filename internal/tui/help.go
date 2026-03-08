@@ -99,6 +99,7 @@ func appHelp() []helpEntry {
 		{"Ctrl+K", "Yank from stash"},
 		{"Ctrl+P", "Put yanked into editor"},
 		{"Ctrl+D", "Declare scope"},
+		{"Ctrl+B", "Decompose into sub-vectors"},
 		{"Ctrl+X", "Prune stash entry"},
 		{"↑/k ↓/j", "Navigate stash"},
 		{"Ctrl+C", "Quit"},
