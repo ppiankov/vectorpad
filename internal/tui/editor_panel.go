@@ -23,18 +23,20 @@ const (
 )
 
 type editorPanel struct {
-	textarea    textarea.Model
-	sentences   []classifier.Sentence
-	vectorBlock string
-	metrics     preflight.Metrics
-	driftResult drift.Result
-	baseline    string // first non-empty text, used for drift comparison
-	attachments []*attach.Attachment
-	attachCfgs  []attach.ExcerptConfig
-	copyStatus  copyStatus
-	copyMsg     string
-	width       int
-	height      int
+	textarea           textarea.Model
+	sentences          []classifier.Sentence
+	vectorBlock        string
+	metrics            preflight.Metrics
+	driftResult        drift.Result
+	baseline           string   // first non-empty text, used for drift comparison
+	prevConstraints    []string // constraint sentences from previous classification
+	removedConstraints []string // constraints that were removed since last classification
+	attachments        []*attach.Attachment
+	attachCfgs         []attach.ExcerptConfig
+	copyStatus         copyStatus
+	copyMsg            string
+	width              int
+	height             int
 }
 
 func newEditorPanel() editorPanel {
@@ -118,6 +120,15 @@ func (p *editorPanel) reclassify() {
 	p.sentences = classifier.Classify(content)
 	p.vectorBlock = vector.Render(p.sentences)
 	p.metrics = preflight.Compute(content, p.sentences)
+
+	// Constraint pinning: detect removed constraints.
+	currentConstraints := extractConstraintTexts(p.sentences)
+	if len(p.prevConstraints) > 0 {
+		p.removedConstraints = findRemoved(p.prevConstraints, currentConstraints)
+	} else {
+		p.removedConstraints = nil
+	}
+	p.prevConstraints = currentConstraints
 
 	// Compare current text against baseline for meaning drift.
 	if p.baseline != "" && content != p.baseline {
@@ -261,4 +272,28 @@ func renderClassifiedLine(line string) string {
 		return styleLocked.Render("  " + line)
 	}
 	return styleMuted.Render("  " + line)
+}
+
+func extractConstraintTexts(sentences []classifier.Sentence) []string {
+	var constraints []string
+	for _, s := range sentences {
+		if s.Tag == classifier.TagConstraint {
+			constraints = append(constraints, s.Text)
+		}
+	}
+	return constraints
+}
+
+func findRemoved(prev, current []string) []string {
+	currentSet := make(map[string]bool, len(current))
+	for _, c := range current {
+		currentSet[c] = true
+	}
+	var removed []string
+	for _, p := range prev {
+		if !currentSet[p] {
+			removed = append(removed, p)
+		}
+	}
+	return removed
 }

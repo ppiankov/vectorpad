@@ -71,6 +71,7 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 func (m *AppModel) syncRisk() {
 	m.risk.analyzeText(m.editor.value())
 	m.risk.driftResult = m.editor.driftResult
+	m.risk.removedConstraints = m.editor.removedConstraints
 }
 
 func (m *AppModel) loadStash() {
