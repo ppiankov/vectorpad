@@ -488,7 +488,7 @@ func renderCenteredOverlay(content string, width, height int) string {
 
 func panelBorderStyle(focused bool) lipgloss.Style {
 	if focused {
-		return styleFocusBorder.Copy()
+		return styleFocusBorder
 	}
-	return styleInactiveBorder.Copy()
+	return styleInactiveBorder
 }

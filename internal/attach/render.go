@@ -20,11 +20,6 @@ func RenderObjectCard(a *Attachment, maxLines int, width int) string {
 	if a.Lines >= 0 {
 		meta += fmt.Sprintf("  %d lines", a.Lines)
 	}
-	header := fmt.Sprintf("%s %s  %s", a.Label, a.Name, meta)
-	if len(header) > innerW {
-		header = header[:innerW]
-	}
-
 	// Top border
 	topLabel := fmt.Sprintf("─ %s %s ", a.Label, a.Name)
 	if len(topLabel) > innerW {

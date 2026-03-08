@@ -67,7 +67,7 @@ func headLines(path string, n int) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
@@ -82,7 +82,7 @@ func tailLines(path string, n int) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ring := make([]string, 0, n)
 	scanner := bufio.NewScanner(f)
