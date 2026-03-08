@@ -1,7 +1,7 @@
 # vectorpad
 
 [![CI](https://github.com/ppiankov/vectorpad/actions/workflows/ci.yml/badge.svg)](https://github.com/ppiankov/vectorpad/actions/workflows/ci.yml)
-[![Release](https://github.com/ppiankov/vectorpad/releases/latest/badge.svg)](https://github.com/ppiankov/vectorpad/releases/latest)
+[![Release](https://img.shields.io/github/v/release/ppiankov/vectorpad)](https://github.com/ppiankov/vectorpad/releases/latest)
 [![Go](https://img.shields.io/github/go-mod/go-version/ppiankov/vectorpad)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
