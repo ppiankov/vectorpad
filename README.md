@@ -165,7 +165,6 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 - **Blast radius counts text patterns, not actual repos.** It looks for numbers adjacent to scope words, not your filesystem
 - **No persistent attachment content.** The stash stores path references, not file content. Stale paths are possible
 - **macOS-first clipboard.** Uses `pbcopy` on macOS, `xsel`/`xclip` on Linux. No Windows support yet
-- **No Cobra.** The CLI is hand-rolled. Works for 5 subcommands; will need Cobra if the CLI grows
 
 ## Roadmap
 
@@ -173,8 +172,9 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 - [x] Phase 2 - ambiguity detection, stash persistence, capability detection
 - [x] Phase 3 - file attachment pipeline (detect, classify, preview, serialize)
 - [x] Phase 4 - launch targets, essence extraction, stash uniqueness visualization, shell completions
-- [ ] Phase 5 - negative space detection, drift timeline in TUI, flight recorder, constraint pinning
-- [ ] Phase 6 - scope declaration, pressure heat map, vector decomposition, contextspectre feedback loop
+- [x] Phase 5 - negative space detection, drift timeline in TUI, flight recorder, constraint pinning
+- [x] Phase 6 - scope declaration, pressure heat map, vector decomposition, contextspectre feedback loop
+- [x] Phase 7 - claim registry (SQLite stash, Ollama embeddings, cosine similarity)
 
 ## License
 
