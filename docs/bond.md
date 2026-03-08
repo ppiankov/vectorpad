@@ -34,8 +34,8 @@ The operator closes the loop by adjusting the vector.
 |-------------|-----------|----------------|
 | Breakpoints | Decision boundaries | Commit points |
 | Variables | Vector state editor | Vector extraction |
-| Step execution | — | Turn-by-turn observation |
-| Stack trace | — | Compaction archaeology |
+| Step execution | - | Turn-by-turn observation |
+| Stack trace | - | Compaction archaeology |
 
 ## Lineage
 
