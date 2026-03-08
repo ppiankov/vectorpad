@@ -99,5 +99,5 @@ All notable changes to this project will be documented in this file.
 - Capability detection for pastewatch and contextspectre
 - Pastewatch integration: scan outbound payload before clipboard copy
 - CLI pipeline: stdin classification + preflight + ambiguity analysis
-- `vectorpad tui` — interactive three-panel interface
-- `vectorpad add` — quick-add ideas to stash from CLI
+- `vectorpad tui` - interactive three-panel interface
+- `vectorpad add` - quick-add ideas to stash from CLI
