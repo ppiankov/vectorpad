@@ -7,6 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Risk panel now displays detected scope markers ("all repos") and target count instead of showing `repos: 0 files: 0`
 
+## [0.5.0] - 2026-03-08
+
+### Added
+- Scope declaration (`ctrl+d`): declare blast radius before writing, cross-reference against text
+- Scope mismatches surface in risk panel (scope vs constraints, operation vs preservation, target mentions)
+
 ## [0.4.0] - 2026-03-08
 
 ### Added
