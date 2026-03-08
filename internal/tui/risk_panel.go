@@ -8,13 +8,15 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/detect"
+	"github.com/ppiankov/vectorpad/internal/negativespace"
 )
 
 type riskPanel struct {
-	result ambiguity.Result
-	nudges []ambiguity.Nudge
-	width  int
-	height int
+	result   ambiguity.Result
+	nudges   []ambiguity.Nudge
+	negSpace negativespace.Result
+	width    int
+	height   int
 }
 
 func newRiskPanel() riskPanel {
@@ -24,6 +26,7 @@ func newRiskPanel() riskPanel {
 func (p *riskPanel) analyze(text string) {
 	p.result = ambiguity.Analyze(text, ambiguity.Scope{})
 	p.nudges = ambiguity.SelectNudges(p.result)
+	p.negSpace = negativespace.Analyze(text)
 }
 
 func (p riskPanel) View(_ bool) string {
@@ -76,6 +79,19 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 	} else {
 		b.WriteString(styleSuccess.Render(" ✓ no warning"))
 		b.WriteString("\n")
+	}
+
+	// Negative space — missing constraint classes
+	if !p.negSpace.Clean() {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("GAPS"))
+		b.WriteString("\n")
+		for _, gap := range p.negSpace.Gaps {
+			b.WriteString(styleWarning.Render(fmt.Sprintf("  [%s]", gap.Class)))
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("  %s", gap.Description)))
+			b.WriteString("\n")
+		}
 	}
 
 	// Clipboard scan result
