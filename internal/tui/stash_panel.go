@@ -109,11 +109,41 @@ func (p stashPanel) View(focused bool) string {
 func formatStackLine(stack stash.Stack, maxWidth int) string {
 	label := stack.Label
 	count := len(stack.Items)
-	line := fmt.Sprintf(" %s  %d", label, count)
+	symbols := uniquenessSymbols(stack)
+	line := fmt.Sprintf(" %s %s %d", symbols, label, count)
 	if len(line) > maxWidth && maxWidth > 0 {
 		line = line[:maxWidth]
 	}
 	return line
+}
+
+// uniquenessSymbols returns a visual indicator for the stack's dominant uniqueness.
+// ● = high (novel), ○ = medium (overlaps), ◌ = low (near-duplicate)
+func uniquenessSymbols(stack stash.Stack) string {
+	if len(stack.Items) == 0 {
+		return "◌"
+	}
+
+	high, med, low := 0, 0, 0
+	for _, item := range stack.Items {
+		switch item.Uniqueness {
+		case stash.UniquenessHigh:
+			high++
+		case stash.UniquenessMedium:
+			med++
+		default:
+			low++
+		}
+	}
+
+	// Show the dominant tier symbol.
+	if high >= med && high >= low {
+		return "●"
+	}
+	if med >= low {
+		return "○"
+	}
+	return "◌"
 }
 
 func stackAge(stack stash.Stack) stash.AgeTier {
