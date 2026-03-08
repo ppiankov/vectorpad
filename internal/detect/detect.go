@@ -38,9 +38,13 @@ type ScanResult struct {
 func Detect() Capabilities {
 	var caps Capabilities
 
-	if path, err := exec.LookPath("pastewatch"); err == nil {
-		caps.Pastewatch = true
-		caps.PastewatchBin = path
+	// Check both binary names: pastewatch-cli (Homebrew) and pastewatch.
+	for _, name := range []string{"pastewatch-cli", "pastewatch"} {
+		if path, err := exec.LookPath(name); err == nil {
+			caps.Pastewatch = true
+			caps.PastewatchBin = path
+			break
+		}
 	}
 
 	if path, err := exec.LookPath("contextspectre"); err == nil {
