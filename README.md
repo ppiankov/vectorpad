@@ -6,7 +6,7 @@ Vector launch pad for AI-assisted reasoning.
 
 VectorPad prevents reasoning contamination by giving the operator a pre-flight routing gate: structure the thought, measure pressure, then choose to send, branch, or stash.
 
-## Why this exists — the README Massacre
+## Why this exists - the README Massacre
 
 VectorPad was born from a simple directive:
 
@@ -21,15 +21,15 @@ The operator meant:
 
 What the agent received was five words.
 
-The cleanup touched 18 repositories and replaced detailed documentation with short templates. Architecture diagrams, usage examples, years of accumulated clarity — gone in one pass.
+The cleanup touched 18 repositories and replaced detailed documentation with short templates. Architecture diagrams, usage examples, years of accumulated clarity - gone in one pass.
 
 Nothing malicious happened. The operator simply transmitted only a fraction of their intent.
 
-That's an [ambiguous vector](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#glossary) — operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
+That's an [ambiguous vector](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#glossary) - operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
 
-VectorPad exists to catch that moment before execution. A smoke detector for operator intent — not a judge, not a blocker. Just enough friction to ask: did you say everything you meant?
+VectorPad exists to catch that moment before execution. A smoke detector for operator intent - not a judge, not a blocker. Just enough friction to ask: did you say everything you meant?
 
-![VectorPad TUI — case classification with locked constraints](assets/screen.png)
+![VectorPad TUI - case classification with locked constraints](assets/screen.png)
 
 ## What it is NOT
 
@@ -43,7 +43,7 @@ Deterministic classification over ML. Structural safety over probabilistic confi
 
 ## Status
 
-Early development. v0.2.1. Public repository — `brew install ppiankov/tap/vectorpad`.
+Early development. v0.2.1. Public repository - `brew install ppiankov/tap/vectorpad`.
 
 ## License
 
