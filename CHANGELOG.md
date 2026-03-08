@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-03-08
+
+### Added
+- Negative space detection: 6 gap types flag missing constraint classes (preservation, success criteria, review, rollback, scope boundary, identity)
+- Drift timeline in TUI: risk panel shows meaning drift as you edit (strengthened/weakened/flipped/added/removed)
+- Flight recorder: append-only JSONL log of launched vectors with metrics, gaps, and outcome annotation (`vectorpad log`)
+- Constraint pinning: risk panel warns when CONSTRAINT sentences are removed during editing
+
 ## [0.3.1] - 2026-03-08
 
 ### Fixed
