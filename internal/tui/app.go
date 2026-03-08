@@ -64,6 +64,7 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 		recorder: rec,
 		caps:     caps,
 		pwMode:   detect.ModeInspect,
+		lastScan: detect.ScanResult{Clean: true},
 	}
 	m.editor.focus()
 	m.loadStash()
