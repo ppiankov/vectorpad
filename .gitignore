@@ -1,5 +1,6 @@
 # Build artifacts
 vectorpad
+coverage.out
 
 # Private agent files
 MEMORY.md
