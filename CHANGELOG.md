@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-03-08
+
+### Fixed
+- Risk panel now displays detected scope markers ("all repos") and target count instead of showing `repos: 0 files: 0`
+
 ## [0.4.0] - 2026-03-08
 
 ### Added
