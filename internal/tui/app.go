@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -35,6 +36,7 @@ type AppModel struct {
 	editor   editorPanel
 	risk     riskPanel
 	help     helpModel
+	launch   launchOverlay
 	store    *stash.Store
 	caps     detect.Capabilities
 	pwMode   detect.PastewatchMode
@@ -50,6 +52,7 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 		stash:  newStashPanel(),
 		editor: newEditorPanel(),
 		risk:   newRiskPanel(),
+		launch: newLaunchOverlay(),
 		store:  store,
 		caps:   caps,
 		pwMode: detect.ModeInspect,
@@ -91,6 +94,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Launch overlay intercepts keys when visible.
+		if m.launch.visible {
+			return m.updateLaunchKeys(msg)
+		}
+
 		// Global keys.
 		if key.Matches(msg, keys.Quit) {
 			return m, tea.Quit
@@ -114,10 +122,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, keys.Launch) {
-			m.copyWithScan()
-			if m.editor.copyStatus == copyCopied {
-				m.editor.copyMsg = "launched " + m.editor.copyMsg
-			}
+			m.launch.show()
 			return m, nil
 		}
 		if key.Matches(msg, keys.Stash) {
@@ -329,14 +334,79 @@ func (m *AppModel) pruneSelectedStack() {
 	m.loadStash()
 }
 
+func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.launch.dismiss()
+		return m, nil
+	case "up", "k":
+		m.launch.moveUp()
+		return m, nil
+	case "down", "j":
+		m.launch.moveDown()
+		return m, nil
+	case "enter":
+		t := m.launch.selected()
+		if t != nil {
+			m.executeLaunch(t)
+		}
+		m.launch.dismiss()
+		return m, nil
+	case "1", "2", "3", "4", "5":
+		t := m.launch.selectByKey(msg.String())
+		if t != nil {
+			m.executeLaunch(t)
+		}
+		m.launch.dismiss()
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *AppModel) executeLaunch(t *launchTarget) {
+	if !t.available {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = fmt.Sprintf("%s: not available", t.name)
+		return
+	}
+
+	payload := m.editor.buildCopyPayload()
+	if payload == "" {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "nothing to launch"
+		return
+	}
+
+	// Run pastewatch scan before launching.
+	m.lastScan = detect.ScanPayload(m.caps, m.pwMode, payload)
+	if !m.lastScan.Clean {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "blocked: secrets detected (see risk panel)"
+		return
+	}
+
+	statusMsg, err := t.action(payload)
+	if err != nil {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = fmt.Sprintf("launch failed: %v", err)
+		return
+	}
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
+}
+
 func (m AppModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "initializing..."
 	}
 
-	// Help overlay takes over the whole screen.
+	// Overlays take over the whole screen.
 	if m.help.visible {
 		return m.help.View()
+	}
+	if m.launch.visible {
+		m.launch.targets = newLaunchOverlay().targets // refresh availability
+		return renderCenteredOverlay(m.launch.View(), m.width, m.height)
 	}
 
 	stashW, editorW, riskW := m.columnWidths()
@@ -365,6 +435,29 @@ func (m AppModel) View() string {
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, panels...)
+}
+
+func renderCenteredOverlay(content string, width, height int) string {
+	contentWidth := lipgloss.Width(content)
+	contentHeight := lipgloss.Height(content)
+
+	padLeft := (width - contentWidth) / 2
+	if padLeft < 0 {
+		padLeft = 0
+	}
+	padTop := (height - contentHeight) / 2
+	if padTop < 0 {
+		padTop = 0
+	}
+
+	var out strings.Builder
+	for range padTop {
+		out.WriteString("\n")
+	}
+	for _, line := range strings.Split(content, "\n") {
+		fmt.Fprintf(&out, "%s%s\n", strings.Repeat(" ", padLeft), line)
+	}
+	return out.String()
 }
 
 func panelBorderStyle(focused bool) lipgloss.Style {
