@@ -53,12 +53,30 @@ type Stack struct {
 	Items   []Item    `json:"items"`
 }
 
+// ItemType classifies the nature of a stashed idea.
+type ItemType string
+
+const (
+	ItemTypeInsight    ItemType = "insight"
+	ItemTypeQuestion   ItemType = "question"
+	ItemTypePattern    ItemType = "pattern"
+	ItemTypeConstraint ItemType = "constraint"
+)
+
 type Item struct {
 	ID         string     `json:"id"`
 	Text       string     `json:"text"`
 	Created    time.Time  `json:"created"`
 	Uniqueness Uniqueness `json:"uniqueness"`
 	Source     Source     `json:"source"`
+	// WO-24: claim registry fields.
+	Title     string    `json:"title,omitempty"`
+	Type      ItemType  `json:"type,omitempty"`
+	Project   string    `json:"project,omitempty"`
+	Tags      []string  `json:"tags,omitempty"`
+	Refs      []string  `json:"refs,omitempty"`
+	ClaimID   string    `json:"claim_id,omitempty"`
+	Embedding []float32 `json:"-"` // stored in SQLite BLOB, not JSON
 }
 
 func (item Item) AgeTier(now time.Time) AgeTier {

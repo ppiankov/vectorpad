@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-03-08
+
+### Added
+- Claim registry: SQLite stash with embedding similarity (`vectorpad stash`)
+- SQLite backend replaces JSON for stash persistence (auto-migrates existing JSON)
+- Ollama embeddings via nomic-embed-text for semantic similarity search
+- Cosine similarity with thresholds: near-duplicate (>0.90), same idea (0.80-0.90), related (0.65-0.80)
+- Claim IDs assigned at stash time for tracking idea evolution
+- CLI: `stash add`, `stash list`, `stash compare`, `stash show`, `stash cluster`, `stash evolve`, `stash reindex`
+- Graceful degradation: works without Ollama (no embeddings, Jaccard fallback for clustering)
+
 ## [0.7.0] - 2026-03-08
 
 ### Added

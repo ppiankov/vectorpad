@@ -18,6 +18,7 @@ const (
 	defaultVectorpadHome = ".vectorpad"
 	stashDirName         = "stash"
 	stashFileName        = "stacks.json"
+	stashDBName          = "stash.db"
 	filePermissions      = 0o600
 	directoryPermissions = 0o700
 )
@@ -27,13 +28,19 @@ var (
 	ErrUnsupportedVersion = errors.New("unsupported stash file version")
 )
 
+// Store manages stash persistence. Uses SQLite as primary backend
+// with JSON as legacy fallback. The TUI interface (Load/Save/Add)
+// is preserved for backward compatibility.
 type Store struct {
-	path        string
+	path        string // legacy JSON path
+	db          *DB
+	embedder    *Embedder
 	now         func() time.Time
 	idGenerator func() (string, error)
 	mu          sync.Mutex
 }
 
+// NewStore creates a JSON-only store (for tests that use the legacy format).
 func NewStore(path string) *Store {
 	return &Store{
 		path:        path,
@@ -42,12 +49,45 @@ func NewStore(path string) *Store {
 	}
 }
 
+// NewDefaultStore opens the SQLite store, migrating from JSON if needed.
 func NewDefaultStore() (*Store, error) {
-	path, err := DefaultPath()
+	base, err := DefaultHome()
 	if err != nil {
 		return nil, err
 	}
-	return NewStore(path), nil
+
+	jsonPath := filepath.Join(base, stashDirName, stashFileName)
+	dbPath := filepath.Join(base, stashDBName)
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		// Fall back to JSON-only if SQLite fails.
+		return NewStore(jsonPath), nil
+	}
+
+	embedder := NewEmbedder()
+
+	store := &Store{
+		path:        jsonPath,
+		db:          db,
+		embedder:    embedder,
+		now:         time.Now,
+		idGenerator: generateItemID,
+	}
+
+	// Auto-migrate from JSON if DB is empty and JSON exists.
+	count, _ := db.Count()
+	if count == 0 {
+		if _, statErr := os.Stat(jsonPath); statErr == nil {
+			migrated, _ := MigrateJSON(jsonPath, db, embedder)
+			if migrated > 0 {
+				// Keep JSON as backup, don't delete.
+				_ = migrated
+			}
+		}
+	}
+
+	return store, nil
 }
 
 func DefaultPath() (string, error) {
@@ -75,20 +115,85 @@ func (store *Store) Path() string {
 	return store.path
 }
 
+// DB returns the underlying SQLite database, or nil if JSON-only.
+func (store *Store) DB() *DB {
+	return store.db
+}
+
+// Embedder returns the Ollama embedder, or nil if unavailable.
+func (store *Store) EmbedderClient() *Embedder {
+	return store.embedder
+}
+
+// Load returns all items clustered into stacks.
+// If SQLite is available, reads from DB. Otherwise falls back to JSON.
 func (store *Store) Load() (StashFile, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	return store.loadLocked()
+	if store.db != nil {
+		return store.loadFromDB()
+	}
+	return store.loadFromJSON()
 }
 
+func (store *Store) loadFromDB() (StashFile, error) {
+	items, err := store.db.All()
+	if err != nil {
+		return StashFile{}, fmt.Errorf("load from db: %w", err)
+	}
+	if len(items) == 0 {
+		return newEmptyStash(), nil
+	}
+
+	now := store.now().UTC()
+	stacks := ClusterItems(items, now)
+	return StashFile{
+		Stacks:  stacks,
+		Version: CurrentVersion,
+	}, nil
+}
+
+// Save persists a StashFile. With SQLite, this reconciles: items in the
+// file that are no longer present get deleted from DB (used by prune).
 func (store *Store) Save(file StashFile) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	return store.saveLocked(file)
+	if store.db != nil {
+		return store.saveToDBReconcile(file)
+	}
+	return store.saveToJSON(file)
 }
 
+func (store *Store) saveToDBReconcile(file StashFile) error {
+	// Get current DB items.
+	dbItems, err := store.db.All()
+	if err != nil {
+		return err
+	}
+
+	// Build set of IDs in the incoming file.
+	fileIDs := make(map[string]bool)
+	for _, stack := range file.Stacks {
+		for _, item := range stack.Items {
+			fileIDs[item.ID] = true
+		}
+	}
+
+	// Delete items that are in DB but not in file (pruned).
+	for _, dbItem := range dbItems {
+		if !fileIDs[dbItem.ID] {
+			if err := store.db.Delete(dbItem.ID); err != nil {
+				return fmt.Errorf("delete pruned item %s: %w", dbItem.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// Add creates a new stash item. With SQLite, inserts directly to DB
+// and computes embedding if Ollama is available.
 func (store *Store) Add(text string, source Source) (Item, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -101,11 +206,6 @@ func (store *Store) Add(text string, source Source) (Item, error) {
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
-
-	file, err := store.loadLocked()
-	if err != nil {
-		return Item{}, err
-	}
 
 	now := store.now().UTC()
 	id, err := store.idGenerator()
@@ -121,16 +221,84 @@ func (store *Store) Add(text string, source Source) (Item, error) {
 		Source:     source,
 	}
 
+	if store.db != nil {
+		return store.addToDB(item)
+	}
+	return store.addToJSON(item)
+}
+
+// AddWithMeta creates a stash item with full metadata (for CLI commands).
+func (store *Store) AddWithMeta(text string, source Source, title string, itemType ItemType, project string, tags []string) (Item, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return Item{}, ErrEmptyText
+	}
+
+	if source == "" {
+		source = SourceCLI
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	now := store.now().UTC()
+	id, err := store.idGenerator()
+	if err != nil {
+		return Item{}, fmt.Errorf("generate stash item id: %w", err)
+	}
+
+	claimID, _ := generateClaimID()
+
+	item := Item{
+		ID:         id,
+		Text:       trimmed,
+		Created:    now,
+		Uniqueness: UniquenessHigh,
+		Source:     source,
+		Title:      title,
+		Type:       itemType,
+		Project:    project,
+		Tags:       tags,
+		ClaimID:    claimID,
+	}
+
+	if store.db != nil {
+		return store.addToDB(item)
+	}
+	return store.addToJSON(item)
+}
+
+func (store *Store) addToDB(item Item) (Item, error) {
+	// Compute embedding if available.
+	if store.embedder != nil && store.embedder.Available() {
+		if vec, err := store.embedder.Embed(item.Text); err == nil {
+			item.Embedding = vec
+		}
+	}
+
+	if err := store.db.Insert(item); err != nil {
+		return Item{}, fmt.Errorf("insert to db: %w", err)
+	}
+	return item, nil
+}
+
+func (store *Store) addToJSON(item Item) (Item, error) {
+	file, err := store.loadFromJSON()
+	if err != nil {
+		return Item{}, err
+	}
+
+	now := store.now().UTC()
 	items := flattenItems(file.Stacks)
 	items = append(items, item)
 
 	file.Stacks = ClusterItems(items, now)
 	file.Version = CurrentVersion
-	if err := store.saveLocked(file); err != nil {
+	if err := store.saveToJSON(file); err != nil {
 		return Item{}, err
 	}
 
-	stored, ok := findItemByID(file.Stacks, id)
+	stored, ok := findItemByID(file.Stacks, item.ID)
 	if !ok {
 		return item, nil
 	}
@@ -148,7 +316,7 @@ func findItemByID(stacks []Stack, id string) (Item, bool) {
 	return Item{}, false
 }
 
-func (store *Store) loadLocked() (StashFile, error) {
+func (store *Store) loadFromJSON() (StashFile, error) {
 	data, err := os.ReadFile(store.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -163,7 +331,7 @@ func (store *Store) loadLocked() (StashFile, error) {
 		if backupErr == nil {
 			backupFile, backupDecodeErr := decodeStashFile(backupData)
 			if backupDecodeErr == nil {
-				migratedBackup, _, migrateErr := migrate(backupFile)
+				migratedBackup, _, migrateErr := migrateJSON(backupFile)
 				if migrateErr != nil {
 					return StashFile{}, migrateErr
 				}
@@ -173,12 +341,12 @@ func (store *Store) loadLocked() (StashFile, error) {
 		return StashFile{}, fmt.Errorf("decode stash file: %w", err)
 	}
 
-	migrated, didMigrate, err := migrate(file)
+	migrated, didMigrate, err := migrateJSON(file)
 	if err != nil {
 		return StashFile{}, err
 	}
 	if didMigrate {
-		if err := store.saveLocked(migrated); err != nil {
+		if err := store.saveToJSON(migrated); err != nil {
 			return StashFile{}, fmt.Errorf("persist migrated stash file: %w", err)
 		}
 	}
@@ -194,7 +362,7 @@ func decodeStashFile(data []byte) (StashFile, error) {
 	return file, nil
 }
 
-func migrate(file StashFile) (StashFile, bool, error) {
+func migrateJSON(file StashFile) (StashFile, bool, error) {
 	didMigrate := false
 	switch file.Version {
 	case 0:
@@ -261,8 +429,8 @@ func newEmptyStash() StashFile {
 	}
 }
 
-func (store *Store) saveLocked(file StashFile) error {
-	normalized, _, err := migrate(file)
+func (store *Store) saveToJSON(file StashFile) error {
+	normalized, _, err := migrateJSON(file)
 	if err != nil {
 		return err
 	}
@@ -344,9 +512,7 @@ func syncDirectory(dir string) error {
 	}
 	defer func() { _ = handle.Close() }()
 
-	if err := handle.Sync(); err != nil {
-		return nil
-	}
+	_ = handle.Sync()
 	return nil
 }
 
@@ -360,4 +526,12 @@ func generateItemID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buffer), nil
+}
+
+func generateClaimID() (string, error) {
+	buffer := make([]byte, 4)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return "claim-" + hex.EncodeToString(buffer), nil
 }
