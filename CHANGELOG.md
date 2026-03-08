@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-08
+
+### Added
+- Launch target picker (`ctrl+l`): clipboard, Claude for Mac, ChatGPT for Mac, Claude Code CLI, file
+- Essence extraction (`ctrl+e`): collapse stash stack into launchable summary
+- Stash uniqueness symbols: `●` bright (novel), `○` dim (overlaps), `◌` faint (duplicate)
+- Shell completions for bash, zsh, and fish (`vectorpad completion <shell>`)
+- Full README with badges, architecture, philosophy, bond, roadmap
+
 ## [0.2.1] - 2026-03-08
 
 ### Fixed
