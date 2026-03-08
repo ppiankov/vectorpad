@@ -33,6 +33,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runAdd(args[2:], stdout, stderr)
 		case "tui":
 			return runTUI(stderr)
+		case "completion":
+			return runCompletion(args[2:], stdout, stderr)
 		}
 	}
 
@@ -122,6 +124,86 @@ func runAdd(args []string, stdout io.Writer, stderr io.Writer) int {
 	_, _ = fmt.Fprintf(stdout, "stashed %s\n", item.ID)
 	return 0
 }
+
+func runCompletion(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad completion <bash|zsh|fish>")
+		return 1
+	}
+	switch args[0] {
+	case "bash":
+		_, _ = fmt.Fprint(stdout, completionBash)
+	case "zsh":
+		_, _ = fmt.Fprint(stdout, completionZsh)
+	case "fish":
+		_, _ = fmt.Fprint(stdout, completionFish)
+	default:
+		_, _ = fmt.Fprintf(stderr, "unknown shell: %s (supported: bash, zsh, fish)\n", args[0])
+		return 1
+	}
+	return 0
+}
+
+const completionBash = `# vectorpad bash completion
+_vectorpad() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=($(compgen -W "tui add version completion" -- "${cur}"))
+        return 0
+    fi
+
+    case "${prev}" in
+        completion)
+            COMPREPLY=($(compgen -W "bash zsh fish" -- "${cur}"))
+            return 0
+            ;;
+    esac
+}
+complete -F _vectorpad vectorpad
+`
+
+const completionZsh = `#compdef vectorpad
+
+_vectorpad() {
+    local -a commands
+    commands=(
+        'tui:launch interactive TUI'
+        'add:quick-add idea to stash'
+        'version:print version'
+        'completion:generate shell completions'
+    )
+
+    _arguments -C \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case $state in
+        command)
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                completion)
+                    _values 'shell' bash zsh fish
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_vectorpad "$@"
+`
+
+const completionFish = `# vectorpad fish completion
+complete -c vectorpad -f
+complete -c vectorpad -n '__fish_use_subcommand' -a tui -d 'Launch interactive TUI'
+complete -c vectorpad -n '__fish_use_subcommand' -a add -d 'Quick-add idea to stash'
+complete -c vectorpad -n '__fish_use_subcommand' -a version -d 'Print version'
+complete -c vectorpad -n '__fish_use_subcommand' -a completion -d 'Generate shell completions'
+complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+`
 
 func isTerminal(f *os.File) bool {
 	info, err := f.Stat()

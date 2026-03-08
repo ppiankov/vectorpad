@@ -53,5 +53,6 @@ brews:
     license: MIT
     install: |
       bin.install "vectorpad"
+      generate_completions_from_executable(bin/"vectorpad", "completion")
     test: |
       assert_match version.to_s, shell_output("#{bin}/vectorpad version")
