@@ -13,7 +13,7 @@ A pre-flight staging area for operator intent. You paste your directive, VectorP
 
 Think of it as the pre-flight checklist before you push reasoning into a bounded context window. Structure the thought, see the pressure, then choose: launch, stash, or branch.
 
-## Why this exists — the README Massacre
+## Why this exists - the README Massacre
 
 VectorPad was born from a simple directive:
 
@@ -28,22 +28,22 @@ The operator meant:
 
 What the agent received was five words.
 
-The cleanup touched 18 repositories and replaced detailed documentation with short templates. Architecture diagrams, usage examples, years of accumulated clarity — gone in one pass.
+The cleanup touched 18 repositories and replaced detailed documentation with short templates. Architecture diagrams, usage examples, years of accumulated clarity - gone in one pass.
 
 Nothing malicious happened. The operator simply transmitted only a fraction of their intent.
 
-That's an [ambiguous vector](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#glossary) — operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
+That's an [ambiguous vector](https://github.com/ppiankov/contextspectre/blob/main/docs/concepts.md#glossary) - operator intent compressed below safe execution resolution. Not a bad prompt. Not a bad model. A transmission failure: private clarity that didn't survive serialization to text.
 
-VectorPad exists to catch that moment before execution. A smoke detector for operator intent — not a judge, not a blocker. Just enough friction to ask: did you say everything you meant?
+VectorPad exists to catch that moment before execution. A smoke detector for operator intent - not a judge, not a blocker. Just enough friction to ask: did you say everything you meant?
 
-![VectorPad TUI — sentence classification with locked constraints](assets/screen.png)
+![VectorPad TUI - sentence classification with locked constraints](assets/screen.png)
 
 ## What VectorPad is NOT
 
 - **Not a prompt template engine.** No fill-in-the-blank scaffolding. You write raw thought; VectorPad shows you what it looks like under classification
 - **Not an LLM wrapper or chat interface.** VectorPad never calls a model. It stages what you send, not where you send it
-- **Not a text editor.** It's a staging area with intentional friction on input and zero friction on output. You don't compose here — you inspect and launch
-- **Not a code editor plugin** (yet). The terminal is the interface because cognitive separation matters — preflight thinking happens outside the execution environment
+- **Not a text editor.** It's a staging area with intentional friction on input and zero friction on output. You don't compose here - you inspect and launch
+- **Not a code editor plugin** (yet). The terminal is the interface because cognitive separation matters - preflight thinking happens outside the execution environment
 
 ## Philosophy
 
@@ -51,7 +51,7 @@ Bounded context + uncontrolled flow = reasoning collapse. That's the core equati
 
 VectorPad applies three principles:
 - **Deterministic classification over ML.** Every sentence gets a tag via regex and token matching. No probabilities, no embeddings, no model calls
-- **Structural safety over probabilistic confidence.** The smoke detector fires on measurable signals (brevity ratio, vague verbs, scope markers) — not on vibes
+- **Structural safety over probabilistic confidence.** The smoke detector fires on measurable signals (brevity ratio, vague verbs, scope markers) - not on vibes
 - **Meaning preservation over brevity.** Constraints get locked. Decisions get flagged. The vector leaves VectorPad with the same intent density it entered with
 
 ## Quick start
@@ -108,7 +108,7 @@ Parks an idea in the stash from the command line. Clustering happens automatical
 
 ### File attachments
 
-Drag a file into the terminal — VectorPad intercepts the path, classifies the file type, and creates an attachment object. Files become named references in the vector, not raw content pasted inline. On copy-out, attachments serialize to text-safe excerpts.
+Drag a file into the terminal - VectorPad intercepts the path, classifies the file type, and creates an attachment object. Files become named references in the vector, not raw content pasted inline. On copy-out, attachments serialize to text-safe excerpts.
 
 ## Architecture
 
@@ -134,7 +134,7 @@ Drag a file into the terminal — VectorPad intercepts the path, classifies the 
 |---------|---------------|
 | `classifier` | 6-tag sentence classification (CONSTRAINT, DECISION, TENTATIVE, QUESTION, SPECULATION, EXPLANATION) |
 | `drift` | Meaning drift detection on 6 axes (modality, negation, numeric, scope, conditional, commitment) |
-| `vector` | Vector block rendering — grouped, classified output |
+| `vector` | Vector block rendering - grouped, classified output |
 | `preflight` | Pre-flight metrics: token weight, vector integrity, CPD/TTC/CDR projections |
 | `ambiguity` | Ambiguous vector detection: blast radius, brevity ratio, vague verbs, nudge protocol |
 | `stash` | Idea persistence with Jaccard similarity clustering and uniqueness scoring |
@@ -150,8 +150,8 @@ VectorPad is one half of a reasoning debugger. The other half is [ContextSpectre
 
 | Tool | Role | Analogy |
 |------|------|---------|
-| VectorPad | Pre-flight — structure intent before sending | Setting breakpoints and inspecting variables |
-| ContextSpectre | Runtime — observe what happens inside the session | Watching the stack trace and stepping through execution |
+| VectorPad | Pre-flight - structure intent before sending | Setting breakpoints and inspecting variables |
+| ContextSpectre | Runtime - observe what happens inside the session | Watching the stack trace and stepping through execution |
 
 The feedback loop: VectorPad predicts CPD/TTC/CDR → model executes → ContextSpectre measures actual metrics → operator adjusts the next vector.
 
@@ -159,7 +159,7 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 
 ## Known limitations
 
-- **Classifier is pattern-based.** Sentences without signal words ("must", "should", "will we", "maybe") classify as EXPLANATION by default. This is intentional — false negatives are safer than false positives
+- **Classifier is pattern-based.** Sentences without signal words ("must", "should", "will we", "maybe") classify as EXPLANATION by default. This is intentional - false negatives are safer than false positives
 - **Blast radius counts text patterns, not actual repos.** It looks for numbers adjacent to scope words, not your filesystem
 - **No persistent attachment content.** The stash stores path references, not file content. Stale paths are possible
 - **macOS-first clipboard.** Uses `pbcopy` on macOS, `xsel`/`xclip` on Linux. No Windows support yet
@@ -167,11 +167,11 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 
 ## Roadmap
 
-- [x] Phase 1 — classifier, drift, vector block, preflight, TUI shell
-- [x] Phase 2 — ambiguity detection, stash persistence, capability detection
-- [x] Phase 3 — file attachment pipeline (detect, classify, preview, serialize)
-- [ ] Phase 4 — launch targets, essence extraction, stash uniqueness visualization, shell completions
-- [ ] Phase 5 — contextspectre feedback loop (predicted vs actual metrics)
+- [x] Phase 1 - classifier, drift, vector block, preflight, TUI shell
+- [x] Phase 2 - ambiguity detection, stash persistence, capability detection
+- [x] Phase 3 - file attachment pipeline (detect, classify, preview, serialize)
+- [ ] Phase 4 - launch targets, essence extraction, stash uniqueness visualization, shell completions
+- [ ] Phase 5 - contextspectre feedback loop (predicted vs actual metrics)
 
 ## License
 
