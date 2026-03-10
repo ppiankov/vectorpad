@@ -645,7 +645,7 @@ func runConfig(args []string, stdout io.Writer, stderr io.Writer) int {
 
 func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	// Parse flags.
-	var target string
+	var target, output string
 	dryRun := false
 	noPreflight := false
 
@@ -656,6 +656,11 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 				i++
 				target = args[i]
 			}
+		case "--output", "-o":
+			if i+1 < len(args) {
+				i++
+				output = args[i]
+			}
 		case "--dry-run":
 			dryRun = true
 		case "--no-preflight":
@@ -664,7 +669,7 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	}
 
 	if target != "oracul" {
-		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to oracul [--dry-run] [--no-preflight]")
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to oracul [--output file.json] [--dry-run] [--no-preflight]")
 		return 1
 	}
 
@@ -747,15 +752,28 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	}
 
 	// Pretty-print the response.
+	var formatted []byte
 	var pretty json.RawMessage
 	if json.Unmarshal(raw, &pretty) == nil {
-		formatted, err := json.MarshalIndent(pretty, "", "  ")
-		if err == nil {
-			_, _ = fmt.Fprintln(stdout, string(formatted))
-			return 0
+		if f, err := json.MarshalIndent(pretty, "", "  "); err == nil {
+			formatted = f
 		}
 	}
-	_, _ = fmt.Fprintln(stdout, string(raw))
+	if formatted == nil {
+		formatted = raw
+	}
+
+	// Write to file if --output specified.
+	if output != "" {
+		if err := os.WriteFile(output, append(formatted, '\n'), 0644); err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: write %s: %v\n", output, err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stderr, "verdict written to %s\n", output)
+		return 0
+	}
+
+	_, _ = fmt.Fprintln(stdout, string(formatted))
 	return 0
 }
 
