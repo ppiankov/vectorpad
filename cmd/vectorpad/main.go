@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,10 +12,12 @@ import (
 
 	"github.com/ppiankov/vectorpad/internal/ambiguity"
 	"github.com/ppiankov/vectorpad/internal/classifier"
+	"github.com/ppiankov/vectorpad/internal/config"
 	"github.com/ppiankov/vectorpad/internal/decompose"
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/oracul"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
@@ -43,6 +47,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runLog(args[2:], stdout, stderr)
 		case "stash":
 			return runStash(args[2:], stdout, stderr)
+		case "config":
+			return runConfig(args[2:], stdout, stderr)
+		case "submit":
+			return runSubmit(args[2:], stdin, stdout, stderr)
+		case "export":
+			return runExport(args[2:], stdin, stdout, stderr)
 		}
 	}
 
@@ -595,6 +605,203 @@ func printItem(stdout io.Writer, item stash.Item) {
 	_, _ = fmt.Fprintf(stdout, "%s%s  %s\n", id, meta, text)
 }
 
+func runConfig(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) < 2 {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad config <set|get> <key> [value]")
+		return 1
+	}
+
+	switch args[0] {
+	case "set":
+		if len(args) < 3 {
+			_, _ = fmt.Fprintln(stderr, "usage: vectorpad config set <key> <value>")
+			return 1
+		}
+		if err := config.Set(args[1], args[2]); err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout, "set %s\n", args[1])
+		return 0
+
+	case "get":
+		val, err := config.Get(args[1])
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		// Mask API keys in output.
+		if strings.Contains(args[1], "api_key") && len(val) > 8 {
+			val = val[:4] + strings.Repeat("*", len(val)-8) + val[len(val)-4:]
+		}
+		_, _ = fmt.Fprintln(stdout, val)
+		return 0
+
+	default:
+		_, _ = fmt.Fprintf(stderr, "unknown config command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	// Parse flags.
+	var target string
+	dryRun := false
+	noPreflight := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--to":
+			if i+1 < len(args) {
+				i++
+				target = args[i]
+			}
+		case "--dry-run":
+			dryRun = true
+		case "--no-preflight":
+			noPreflight = true
+		}
+	}
+
+	if target != "oracul" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to oracul [--dry-run] [--no-preflight]")
+		return 1
+	}
+
+	// Load config.
+	cfg, err := config.Load()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if cfg.Oracul.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+		return 1
+	}
+
+	// Read input.
+	input, err := io.ReadAll(stdin)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	text := strings.TrimSpace(string(input))
+	if text == "" {
+		_, _ = fmt.Fprintln(stderr, "error: empty input")
+		return 1
+	}
+
+	// Classify and map.
+	sentences := classifier.Classify(text)
+	filing := oracul.MapSentences(sentences)
+	question := oracul.ExtractQuestion(sentences, text)
+
+	req := &oracul.ConsultRequest{
+		Question: question,
+		Filing:   filing,
+	}
+
+	// Dry run: print request and exit.
+	if dryRun {
+		data, err := json.MarshalIndent(req, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return 0
+	}
+
+	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+
+	// Preflight gate.
+	if !noPreflight {
+		_, _ = fmt.Fprintln(stderr, "running preflight check...")
+		gate, err := client.PreflightGate(context.Background(), question, filing)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "preflight error: %v\n", err)
+			return 1
+		}
+
+		if !gate.Allowed {
+			_, _ = fmt.Fprintf(stderr, "REJECTED: %s\n", gate.Reason)
+			return 1
+		}
+
+		if len(gate.Warnings) > 0 {
+			_, _ = fmt.Fprintf(stderr, "preflight warnings (tier: %s, quality: %.0f%%):\n", gate.Tier, gate.Quality*100)
+			for _, w := range gate.Warnings {
+				_, _ = fmt.Fprintf(stderr, "  - %s\n", w)
+			}
+		} else {
+			_, _ = fmt.Fprintf(stderr, "preflight: ACCEPTED (tier: %s, quality: %.0f%%)\n", gate.Tier, gate.Quality*100)
+		}
+	}
+
+	// Submit.
+	_, _ = fmt.Fprintln(stderr, "deliberation in progress...")
+	raw, err := client.Consult(context.Background(), req)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	// Pretty-print the response.
+	var pretty json.RawMessage
+	if json.Unmarshal(raw, &pretty) == nil {
+		formatted, err := json.MarshalIndent(pretty, "", "  ")
+		if err == nil {
+			_, _ = fmt.Fprintln(stdout, string(formatted))
+			return 0
+		}
+	}
+	_, _ = fmt.Fprintln(stdout, string(raw))
+	return 0
+}
+
+func runExport(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	var format string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--format" && i+1 < len(args) {
+			i++
+			format = args[i]
+		}
+	}
+
+	if format != "oracul" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad export --format oracul")
+		return 1
+	}
+
+	input, err := io.ReadAll(stdin)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	text := strings.TrimSpace(string(input))
+	if text == "" {
+		_, _ = fmt.Fprintln(stderr, "error: empty input")
+		return 1
+	}
+
+	sentences := classifier.Classify(text)
+	filing := oracul.MapSentences(sentences)
+	question := oracul.ExtractQuestion(sentences, text)
+
+	req := &oracul.ConsultRequest{
+		Question: question,
+		Filing:   filing,
+	}
+
+	data, err := json.MarshalIndent(req, "", "  ")
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintln(stdout, string(data))
+	return 0
+}
+
 func runCompletion(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: vectorpad completion <bash|zsh|fish>")
@@ -620,7 +827,7 @@ _vectorpad() {
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        COMPREPLY=($(compgen -W "tui add stash version completion log" -- "${cur}"))
+        COMPREPLY=($(compgen -W "tui add stash version completion log config submit export" -- "${cur}"))
         return 0
     fi
 
@@ -645,6 +852,9 @@ _vectorpad() {
         'completion:generate shell completions'
         'log:view flight log'
         'stash:manage claim registry'
+        'config:get or set configuration'
+        'submit:submit case to Oracul for deliberation'
+        'export:export classified case as JSON'
     )
 
     _arguments -C \
@@ -676,6 +886,9 @@ complete -c vectorpad -n '__fish_use_subcommand' -a version -d 'Print version'
 complete -c vectorpad -n '__fish_use_subcommand' -a completion -d 'Generate shell completions'
 complete -c vectorpad -n '__fish_use_subcommand' -a log -d 'View flight log'
 complete -c vectorpad -n '__fish_use_subcommand' -a stash -d 'Manage claim registry'
+complete -c vectorpad -n '__fish_use_subcommand' -a config -d 'Get or set configuration'
+complete -c vectorpad -n '__fish_use_subcommand' -a submit -d 'Submit case to Oracul'
+complete -c vectorpad -n '__fish_use_subcommand' -a export -d 'Export classified case'
 complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 `
 

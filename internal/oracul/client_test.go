@@ -1,0 +1,187 @@
+package oracul
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestConsultSuccess(t *testing.T) {
+	envelope := map[string]string{"status": "completed", "verdict": "proceed"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/consult" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get("X-Oracul-Key") != "test_key" {
+			t.Errorf("auth header = %q", r.Header.Get("X-Oracul-Key"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(envelope)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test_key")
+	raw, err := client.Consult(context.Background(), &ConsultRequest{
+		Question: "Should we use Kafka?",
+		Filing: &CaseFiling{
+			Decision:    "Use Kafka for messaging",
+			Constraints: []string{"Must handle 10k msg/s"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Consult: %v", err)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if result["status"] != "completed" {
+		t.Errorf("status = %q", result["status"])
+	}
+}
+
+func TestConsultAuthError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid key"})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "bad_key")
+	_, err := client.Consult(context.Background(), &ConsultRequest{Question: "test"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 401 {
+		t.Errorf("status = %d, want 401", apiErr.StatusCode)
+	}
+}
+
+func TestConsultRateLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	_, err := client.Consult(context.Background(), &ConsultRequest{Question: "test"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 429 {
+		t.Errorf("status = %d, want 429", apiErr.StatusCode)
+	}
+}
+
+func TestPreflightSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/preflight" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(PreflightResult{
+			Verdict:       "ACCEPTED",
+			Tier:          "standard",
+			FilingQuality: 0.85,
+			Warnings:      []string{"no success criteria"},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	result, err := client.Preflight(context.Background(), "Should we use Kafka?", &CaseFiling{
+		Decision: "Use Kafka",
+	})
+	if err != nil {
+		t.Fatalf("Preflight: %v", err)
+	}
+	if result.Verdict != "ACCEPTED" {
+		t.Errorf("verdict = %q", result.Verdict)
+	}
+	if result.Tier != "standard" {
+		t.Errorf("tier = %q", result.Tier)
+	}
+	if len(result.Warnings) != 1 {
+		t.Errorf("warnings count = %d", len(result.Warnings))
+	}
+}
+
+func TestPreflightGateAccepted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(PreflightResult{
+			Verdict:       "ACCEPTED",
+			Tier:          "simple",
+			FilingQuality: 0.95,
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	gate, err := client.PreflightGate(context.Background(), "test?", &CaseFiling{Decision: "test"})
+	if err != nil {
+		t.Fatalf("PreflightGate: %v", err)
+	}
+	if !gate.Allowed {
+		t.Error("expected Allowed=true")
+	}
+	if gate.Tier != "simple" {
+		t.Errorf("tier = %q", gate.Tier)
+	}
+}
+
+func TestPreflightGateRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(PreflightResult{
+			Verdict: "REJECTED",
+			Reason:  "topic refusal: medical advice",
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	gate, err := client.PreflightGate(context.Background(), "test?", &CaseFiling{Decision: "test"})
+	if err != nil {
+		t.Fatalf("PreflightGate: %v", err)
+	}
+	if gate.Allowed {
+		t.Error("expected Allowed=false")
+	}
+	if gate.Reason != "topic refusal: medical advice" {
+		t.Errorf("reason = %q", gate.Reason)
+	}
+}
+
+func TestPreflightGateWithWarnings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(PreflightResult{
+			Verdict:  "ACCEPTED",
+			Tier:     "standard",
+			Warnings: []string{"no constraints", "no success criteria"},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	gate, err := client.PreflightGate(context.Background(), "test?", &CaseFiling{Decision: "test"})
+	if err != nil {
+		t.Fatalf("PreflightGate: %v", err)
+	}
+	if !gate.Allowed {
+		t.Error("expected Allowed=true with warnings")
+	}
+	if len(gate.Warnings) != 2 {
+		t.Errorf("warnings count = %d, want 2", len(gate.Warnings))
+	}
+}
