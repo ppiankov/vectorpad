@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-03-10
+
+### Added
+- Oracul integration: `vectorpad submit --to oracul` sends classified cases for deliberation
+- Oracul export: `vectorpad export --format oracul` emits CaseFiling JSON offline
+- Config system: `vectorpad config set/get` for persistent settings (API key, endpoint)
+- Preflight gate: validates cases with Oracul before submission, blocks rejected filings
+- Sentence-to-CaseFiling mapper: DECISION, CONSTRAINT, TENTATIVE, SPECULATION, EXPLANATION tags map to filing fields
+- Shell completions updated for config, submit, export commands
+
 ## [0.9.0] - 2026-03-08
 
 ### Added
