@@ -140,6 +140,8 @@ Drag a file into the terminal - VectorPad intercepts the path, classifies the fi
 | `stash` | Idea persistence with Jaccard similarity clustering and uniqueness scoring |
 | `negativespace` | Negative space detection: flag missing constraint classes in directives |
 | `flight` | Flight recorder: append-only launch log with metrics and outcome annotation |
+| `oracul` | Oracul API client, sentence-to-CaseFiling mapper, preflight gate |
+| `config` | Persistent settings (API keys, endpoints) at `~/.vectorpad/config.json` |
 | `detect` | Capability detection for pastewatch and contextspectre binaries |
 | `attach` | File attachment pipeline: detect path, classify, preview, serialize |
 | `tui` | Three-panel Bubbletea interface with responsive breakpoints |
@@ -167,6 +169,40 @@ See the full [glossary](https://github.com/ppiankov/contextspectre/blob/main/doc
 
 Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) scans outbound payloads for secrets before they enter a context window.
 
+## Decision ops: VectorPad + Oracul
+
+VectorPad can submit classified cases to [Oracul](https://oracul.app) for multi-model deliberation. Oracul runs a council of models that challenge, strengthen, and split reasoning branches before issuing a verdict artifact.
+
+**Requires an Oracul API key.** Oracul is a paid service. Get a key at [oracul.app](https://oracul.app).
+
+```bash
+# Configure
+vectorpad config set oracul.api_key <your-key>
+
+# Classify and submit
+echo "Should we use Kafka or RabbitMQ?" | vectorpad submit --to oracul
+
+# Save verdict as a git-trackable artifact
+echo "Should we use Kafka or RabbitMQ? Must handle 10k msgs/sec." \
+  | vectorpad submit --to oracul --output decisions/message-broker.oracul.json
+
+# Export CaseFiling JSON without submitting (offline, no API key needed)
+echo "Should we use Kafka?" | vectorpad export --format oracul
+```
+
+The submit command classifies your text, maps sentence tags to a structured case filing (CONSTRAINT becomes constraints, DECISION becomes the decision, SPECULATION becomes known risks), runs a preflight check, then sends it to Oracul's `/v1/consult` endpoint.
+
+Verdict artifacts are plain JSON. Put them in a `decisions/` directory and commit them alongside the code they affect:
+
+```bash
+git add decisions/message-broker.oracul.json
+git commit -m "decision: message broker selection"
+```
+
+`git log decisions/` is your decision history. `git blame` tells you when and why. PRs can include a decision artifact alongside the implementation.
+
+VectorPad is the authoring tool. Oracul is the deliberation engine. Git is the ledger.
+
 ## Known limitations
 
 - **Classifier is pattern-based.** Sentences without signal words ("must", "should", "will we", "maybe") classify as EXPLANATION by default. This is intentional - false negatives are safer than false positives
@@ -183,6 +219,7 @@ Optional integration with [Pastewatch](https://github.com/ppiankov/pastewatch) s
 - [x] Phase 5 - negative space detection, drift timeline in TUI, flight recorder, constraint pinning
 - [x] Phase 6 - scope declaration, pressure heat map, vector decomposition, contextspectre feedback loop
 - [x] Phase 7 - claim registry (SQLite stash, Ollama embeddings, cosine similarity)
+- [x] Phase 8 - Oracul integration (submit, export, config, preflight gate)
 
 ## License
 
