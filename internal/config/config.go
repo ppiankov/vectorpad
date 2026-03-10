@@ -27,7 +27,7 @@ type OraculConfig struct {
 
 // DefaultEndpoint returns the default Oracul API endpoint.
 func DefaultEndpoint() string {
-	return "https://oracul.ppiankov.com"
+	return "https://oracul.app"
 }
 
 // Load reads config from ~/.vectorpad/config.json.
