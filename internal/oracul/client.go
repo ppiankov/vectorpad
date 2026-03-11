@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -14,6 +16,7 @@ const (
 	consultTimeout   = 480 * time.Second
 	preflightTimeout = 10 * time.Second
 	accountTimeout   = 5 * time.Second
+	precedentTimeout = 10 * time.Second
 	authHeader       = "X-Oracul-Key"
 )
 
@@ -171,6 +174,43 @@ func (c *Client) Account(ctx context.Context) (*AccountStatus, error) {
 	}
 
 	return &status, nil
+}
+
+// SearchPrecedents searches for similar past decisions.
+func (c *Client) SearchPrecedents(ctx context.Context, question string, limit int) (*PrecedentSearch, error) {
+	ctx, cancel := context.WithTimeout(ctx, precedentTimeout)
+	defer cancel()
+
+	u := c.endpoint + "/v1/precedents/search?q=" + url.QueryEscape(question) + "&limit=" + strconv.Itoa(limit)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("precedent search request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result PrecedentSearch
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse precedent response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // APIError represents a non-2xx response from the Oracul API.

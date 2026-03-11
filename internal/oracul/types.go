@@ -44,6 +44,44 @@ type AccountStatus struct {
 	Active           bool   `json:"active"`
 }
 
+// PrecedentPrediction is a single prediction attached to a precedent case.
+type PrecedentPrediction struct {
+	Statement   string  `json:"statement"`
+	Probability float64 `json:"probability"`
+	Resolved    bool    `json:"resolved"`
+	Correct     *bool   `json:"correct,omitempty"`
+	ActualValue string  `json:"actual_value,omitempty"`
+}
+
+// PrecedentResult is a single precedent case returned by the search endpoint.
+type PrecedentResult struct {
+	CaseID             string                `json:"case_id"`
+	Question           string                `json:"question"`
+	VerdictStatus      string                `json:"verdict_status"`
+	Confidence         float64               `json:"confidence"`
+	CreatedAt          string                `json:"created_at"`
+	SimilarityScore    float64               `json:"similarity_score"`
+	Predictions        []PrecedentPrediction `json:"predictions,omitempty"`
+	OutcomeCount       int                   `json:"outcome_count"`
+	OutcomeCorrectRate float64               `json:"outcome_correct_rate"`
+	ClaimFamilies      []string              `json:"claim_families,omitempty"`
+}
+
+// RefClassSummary summarizes the reference class for a precedent search.
+type RefClassSummary struct {
+	TotalCases       int      `json:"total_cases"`
+	ResolvedCases    int      `json:"resolved_cases"`
+	SuccessRate      float64  `json:"success_rate"`
+	TopClaimFamilies []string `json:"top_claim_families,omitempty"`
+}
+
+// PrecedentSearch is the response from GET /v1/precedents/search.
+type PrecedentSearch struct {
+	Precedents      []PrecedentResult `json:"precedents"`
+	TotalSimilar    int               `json:"total_similar_cases"`
+	RefClassSummary *RefClassSummary  `json:"reference_class_summary,omitempty"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-03-10
+
+### Added
+- Precedent search: live similar-case lookup in TUI risk panel after 3s idle
+- `vectorpad precedent` CLI subcommand with `--limit` and `--json` flags
+- PRECEDENTS section in risk panel: similarity scores, outcome dots, ref class summary
+- `SearchPrecedents()` client method for GET /v1/precedents/search
+- Debounced async precedent search with independent 3s tick track
+
 ## [0.14.0] - 2026-03-10
 
 ### Added
