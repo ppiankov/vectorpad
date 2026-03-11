@@ -595,6 +595,10 @@ func printItem(stdout io.Writer, item stash.Item) {
 	if len(id) > 8 {
 		id = id[:8]
 	}
+	symbol := "●"
+	if item.Source == stash.SourceVerdict {
+		symbol = "◆"
+	}
 	meta := ""
 	if item.Type != "" {
 		meta += " [" + string(item.Type) + "]"
@@ -602,7 +606,7 @@ func printItem(stdout io.Writer, item stash.Item) {
 	if item.Project != "" {
 		meta += " (" + item.Project + ")"
 	}
-	_, _ = fmt.Fprintf(stdout, "%s%s  %s\n", id, meta, text)
+	_, _ = fmt.Fprintf(stdout, "%s %s%s  %s\n", symbol, id, meta, text)
 }
 
 func runConfig(args []string, stdout io.Writer, stderr io.Writer) int {

@@ -118,10 +118,17 @@ func formatStackLine(stack stash.Stack, maxWidth int) string {
 }
 
 // uniquenessSymbols returns a visual indicator for the stack's dominant uniqueness.
-// ● = high (novel), ○ = medium (overlaps), ◌ = low (near-duplicate)
+// ◆ = verdict, ● = high (novel), ○ = medium (overlaps), ◌ = low (near-duplicate)
 func uniquenessSymbols(stack stash.Stack) string {
 	if len(stack.Items) == 0 {
 		return "◌"
+	}
+
+	// Verdict stacks get a distinct diamond symbol.
+	for _, item := range stack.Items {
+		if item.Source == stash.SourceVerdict {
+			return "◆"
+		}
 	}
 
 	high, med, low := 0, 0, 0

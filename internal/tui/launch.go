@@ -13,6 +13,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/config"
 	"github.com/ppiankov/vectorpad/internal/oracul"
+	"github.com/ppiankov/vectorpad/internal/stash"
 )
 
 // launchTarget represents a destination for the vector payload.
@@ -144,8 +145,36 @@ func oraculSubmitAction(payload string) (string, error) {
 		return "", fmt.Errorf("consult: %w", err)
 	}
 
+	// Auto-stash the verdict (best-effort — don't fail the submit).
+	stashVerdict(raw, question)
+
 	// Extract verdict summary for status message.
 	return formatVerdictSummary(raw, gate), nil
+}
+
+// stashVerdict saves the verdict JSON to the stash with a verdict: prefix.
+func stashVerdict(raw json.RawMessage, question string) {
+	store, err := stash.NewDefaultStore()
+	if err != nil {
+		return
+	}
+	// Pretty-print for readability in stash.
+	var pretty json.RawMessage
+	formatted := string(raw)
+	if json.Unmarshal(raw, &pretty) == nil {
+		if f, err := json.MarshalIndent(pretty, "", "  "); err == nil {
+			formatted = string(f)
+		}
+	}
+	title := "verdict"
+	if question != "" {
+		title = question
+		if len(title) > 60 {
+			title = title[:57] + "..."
+		}
+	}
+	text := fmt.Sprintf("verdict: %s\n\n%s", title, formatted)
+	_, _ = store.AddWithMeta(text, stash.SourceVerdict, title, stash.ItemTypeVerdict, "", nil)
 }
 
 // formatVerdictSummary extracts a brief status line from the verdict JSON.
