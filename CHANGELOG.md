@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-03-10
+
+### Added
+- Oracul account status in TUI risk panel: tier, usage bar, reset time (only when API key configured)
+- Account status refreshes on startup and after each launch
+- Silent degradation: section hidden when no key or fetch fails
+
 ## [0.10.0] - 2026-03-10
 
 ### Added
