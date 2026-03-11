@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0] - 2026-03-10
+
+### Added
+- `vectorpad outcome <claim-id> --result success|failure|partial --note "..."`: report decision outcomes to Oracul
+- `ReportOutcome()` client method for POST /v1/cases/:id/outcome
+- Outcome auto-annotates matching flight log record
+- Shell completions updated with `outcome` subcommand
+
 ## [0.19.0] - 2026-03-10
 
 ### Added

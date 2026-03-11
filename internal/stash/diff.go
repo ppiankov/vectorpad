@@ -29,8 +29,8 @@ func DiffVerdicts(a, b Item) (*VerdictDiff, error) {
 		return nil, fmt.Errorf("both items must be verdicts")
 	}
 
-	jsonA := extractVerdictJSON(a.Text)
-	jsonB := extractVerdictJSON(b.Text)
+	jsonA := ExtractVerdictJSON(a.Text)
+	jsonB := ExtractVerdictJSON(b.Text)
 
 	var mapA, mapB map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonA), &mapA); err != nil {
@@ -71,9 +71,9 @@ func DiffVerdicts(a, b Item) (*VerdictDiff, error) {
 	return diff, nil
 }
 
-// extractVerdictJSON pulls the JSON portion from a verdict text.
+// ExtractVerdictJSON pulls the JSON portion from a verdict text.
 // Format: "verdict: <title>\n\n<json>"
-func extractVerdictJSON(text string) string {
+func ExtractVerdictJSON(text string) string {
 	idx := strings.Index(text, "\n\n")
 	if idx < 0 {
 		return text
