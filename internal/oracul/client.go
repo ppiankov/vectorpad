@@ -13,6 +13,7 @@ import (
 const (
 	consultTimeout   = 480 * time.Second
 	preflightTimeout = 10 * time.Second
+	accountTimeout   = 5 * time.Second
 	authHeader       = "X-Oracul-Key"
 )
 
@@ -134,6 +135,42 @@ func (c *Client) PreflightGate(ctx context.Context, question string, filing *Cas
 
 	gate.Allowed = result.Verdict == "ACCEPTED"
 	return gate, nil
+}
+
+// Account fetches the current account status (tier, quota, reset time).
+func (c *Client) Account(ctx context.Context) (*AccountStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, accountTimeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint+"/v1/account", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("account request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var status AccountStatus
+	if err := json.Unmarshal(respBody, &status); err != nil {
+		return nil, fmt.Errorf("parse account response: %w", err)
+	}
+
+	return &status, nil
 }
 
 // APIError represents a non-2xx response from the Oracul API.

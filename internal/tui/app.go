@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -9,9 +10,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/ppiankov/vectorpad/internal/config"
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/oracul"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
 )
@@ -71,6 +74,8 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	// Load contextspectre feedback on startup (nil if unavailable).
 	m.risk.feedback = detect.ReadFeedback(caps)
 	m.risk.decisionEcon = detect.ReadDecisionEconomics(caps)
+	// Load Oracul account status on startup (nil if no key or fetch fails).
+	m.refreshAccountStatus()
 	return m
 }
 
@@ -89,6 +94,25 @@ func (m *AppModel) syncRisk() {
 func (m *AppModel) refreshFeedback() {
 	m.risk.feedback = detect.ReadFeedback(m.caps)
 	m.risk.decisionEcon = detect.ReadDecisionEconomics(m.caps)
+}
+
+// refreshAccountStatus loads Oracul account status into the risk panel.
+// Returns nil (hidden section) if no API key is configured or fetch fails.
+func (m *AppModel) refreshAccountStatus() {
+	cfg, err := config.Load()
+	if err != nil || cfg.Oracul.APIKey == "" {
+		m.risk.accountStatus = nil
+		return
+	}
+	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	status, err := client.Account(ctx)
+	if err != nil {
+		m.risk.accountStatus = nil
+		return
+	}
+	m.risk.accountStatus = status
 }
 
 func (m *AppModel) loadStash() {
@@ -510,8 +534,9 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
 
-	// Refresh contextspectre feedback after launch.
+	// Refresh contextspectre feedback and Oracul account status after launch.
 	m.refreshFeedback()
+	m.refreshAccountStatus()
 
 	// Record the launch in the flight log.
 	if m.recorder != nil {
