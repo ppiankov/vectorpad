@@ -475,7 +475,7 @@ func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.launch.dismiss()
 		return m, nil
-	case "1", "2", "3", "4", "5":
+	case "1", "2", "3", "4", "5", "6":
 		t := m.launch.selectByKey(msg.String())
 		if t != nil {
 			m.executeLaunch(t)
