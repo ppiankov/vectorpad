@@ -24,11 +24,28 @@ builds:
     goarch:
       - amd64
       - arm64
+  - id: vp
+    main: ./cmd/vectorpad/
+    binary: vp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
 
 archives:
   - id: vectorpad-archive
     ids:
       - vectorpad
+      - vp
     formats:
       - tar.gz
     name_template: >-
@@ -53,6 +70,7 @@ brews:
     license: MIT
     install: |
       bin.install "vectorpad"
+      bin.install "vp"
       generate_completions_from_executable(bin/"vectorpad", "completion")
     test: |
       assert_match version.to_s, shell_output("#{bin}/vectorpad version")

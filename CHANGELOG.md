@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-03-10
+
+### Added
+- `vp` short alias: same binary built as `vp` via GoReleaser, included in Homebrew install and release tarballs
+
 ## [0.17.0] - 2026-03-10
 
 ### Added
