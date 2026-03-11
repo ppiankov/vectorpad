@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0] - 2026-03-10
+
+### Added
+- `vectorpad stash diff <id1> <id2>`: compare two verdict entries field-by-field
+- Verdict diff logic in `internal/stash/diff.go`: JSON parsing, field comparison, rendered output
+- `lookupStashItem` helper: find items by ID, claim ID, or prefix match
+
 ## [0.18.0] - 2026-03-10
 
 ### Added

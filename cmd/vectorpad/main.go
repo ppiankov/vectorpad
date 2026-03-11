@@ -271,7 +271,7 @@ func runLog(args []string, stdout io.Writer, stderr io.Writer) int {
 
 func runStash(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: vectorpad stash <add|list|compare|show|cluster|evolve|reindex>")
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad stash <add|list|compare|show|diff|cluster|evolve|reindex>")
 		return 1
 	}
 
@@ -290,6 +290,8 @@ func runStash(args []string, stdout io.Writer, stderr io.Writer) int {
 		return stashCompare(args[1:], store, stdout, stderr)
 	case "show":
 		return stashShow(args[1:], store, stdout, stderr)
+	case "diff":
+		return stashDiff(args[1:], store, stdout, stderr)
 	case "cluster":
 		return stashCluster(store, stdout, stderr)
 	case "evolve":
@@ -513,6 +515,58 @@ func stashShow(args []string, store *stash.Store, stdout io.Writer, stderr io.Wr
 	_, _ = fmt.Fprintf(stdout, "Embedded: %s\n", hasEmbed)
 	_, _ = fmt.Fprintf(stdout, "\n%s\n", item.Text)
 	return 0
+}
+
+func stashDiff(args []string, store *stash.Store, stdout io.Writer, stderr io.Writer) int {
+	if len(args) < 2 {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad stash diff <id1> <id2>")
+		return 1
+	}
+
+	db := store.DB()
+	if db == nil {
+		_, _ = fmt.Fprintln(stderr, "error: stash diff requires SQLite stash")
+		return 1
+	}
+
+	itemA, err := lookupStashItem(db, args[0])
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	itemB, err := lookupStashItem(db, args[1])
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	diff, err := stash.DiffVerdicts(itemA, itemB)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	_, _ = fmt.Fprint(stdout, diff.Render())
+	return 0
+}
+
+// lookupStashItem finds an item by ID, claim ID, or prefix match.
+func lookupStashItem(db *stash.DB, id string) (stash.Item, error) {
+	item, err := db.Get(id)
+	if err == nil {
+		return item, nil
+	}
+	// Try claim ID or prefix match.
+	items, allErr := db.All()
+	if allErr != nil {
+		return stash.Item{}, fmt.Errorf("item not found: %s", id)
+	}
+	for _, it := range items {
+		if it.ClaimID == id || strings.HasPrefix(it.ID, id) || strings.HasPrefix(it.ClaimID, id) {
+			return it, nil
+		}
+	}
+	return stash.Item{}, fmt.Errorf("item not found: %s", id)
 }
 
 func stashCluster(store *stash.Store, stdout io.Writer, stderr io.Writer) int {
