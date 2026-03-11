@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2026-03-10
+
+### Added
+- Live preflight readiness indicator: READY/WARN/BLOCKED updates in risk panel after 2s idle
+- Debounced async preflight check with Bubbletea tick/cmd pattern
+- Cached results until text changes — no redundant API calls
+
 ## [0.12.0] - 2026-03-10
 
 ### Added
