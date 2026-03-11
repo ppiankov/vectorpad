@@ -7,8 +7,8 @@ import (
 
 func TestNewLaunchOverlay(t *testing.T) {
 	o := newLaunchOverlay()
-	if len(o.targets) != 5 {
-		t.Errorf("expected 5 targets, got %d", len(o.targets))
+	if len(o.targets) != 6 {
+		t.Errorf("expected 6 targets, got %d", len(o.targets))
 	}
 	// Clipboard is always available.
 	if !o.targets[0].available {
@@ -71,6 +71,11 @@ func TestLaunchOverlaySelectByKey(t *testing.T) {
 	target = o.selectByKey("5")
 	if target == nil || target.name != "File (prompt.md)" {
 		t.Error("expected File for key 5")
+	}
+
+	target = o.selectByKey("6")
+	if target == nil || target.name != "Oracul Council" {
+		t.Error("expected Oracul Council for key 6")
 	}
 
 	target = o.selectByKey("9")
