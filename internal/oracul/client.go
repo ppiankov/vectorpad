@@ -213,6 +213,50 @@ func (c *Client) SearchPrecedents(ctx context.Context, question string, limit in
 	return &result, nil
 }
 
+const outcomeTimeout = 10 * time.Second
+
+// ReportOutcome submits an outcome for a previously decided case.
+func (c *Client) ReportOutcome(ctx context.Context, caseID string, req *OutcomeRequest) (*OutcomeResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, outcomeTimeout)
+	defer cancel()
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/v1/cases/"+caseID+"/outcome", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("outcome request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result OutcomeResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse outcome response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // APIError represents a non-2xx response from the Oracul API.
 type APIError struct {
 	StatusCode int

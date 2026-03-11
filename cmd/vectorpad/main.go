@@ -56,6 +56,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runExport(args[2:], stdin, stdout, stderr)
 		case "precedent":
 			return runPrecedent(args[2:], stdin, stdout, stderr)
+		case "outcome":
+			return runOutcome(args[2:], stdout, stderr)
 		}
 	}
 
@@ -989,6 +991,106 @@ func runPrecedent(args []string, stdin io.Reader, stdout io.Writer, stderr io.Wr
 	return 0
 }
 
+func runOutcome(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad outcome <claim-id> --result success|failure|partial [--note \"...\"]")
+		return 1
+	}
+
+	claimID := args[0]
+	var result, note string
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--result":
+			if i+1 < len(args) {
+				i++
+				result = args[i]
+			}
+		case "--note":
+			if i+1 < len(args) {
+				i++
+				note = args[i]
+			}
+		}
+	}
+
+	if result == "" {
+		_, _ = fmt.Fprintln(stderr, "error: --result is required (success, failure, or partial)")
+		return 1
+	}
+	if result != "success" && result != "failure" && result != "partial" {
+		_, _ = fmt.Fprintf(stderr, "error: invalid result %q (must be success, failure, or partial)\n", result)
+		return 1
+	}
+
+	// Look up the verdict in stash to find the Oracul case ID.
+	store, err := stash.NewDefaultStore()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	db := store.DB()
+	if db == nil {
+		_, _ = fmt.Fprintln(stderr, "error: outcome requires SQLite stash")
+		return 1
+	}
+
+	item, err := lookupStashItem(db, claimID)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if item.Type != stash.ItemTypeVerdict {
+		_, _ = fmt.Fprintf(stderr, "error: item %s is not a verdict (type: %s)\n", claimID, item.Type)
+		return 1
+	}
+
+	// Extract case ID from verdict JSON.
+	verdictJSON := stash.ExtractVerdictJSON(item.Text)
+	var envelope struct {
+		CaseID string `json:"case_id"`
+	}
+	if err := json.Unmarshal([]byte(verdictJSON), &envelope); err != nil || envelope.CaseID == "" {
+		_, _ = fmt.Fprintln(stderr, "error: verdict does not contain a case_id")
+		return 1
+	}
+
+	// Load config and submit outcome.
+	cfg, err := config.Load()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if cfg.Oracul.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+		return 1
+	}
+
+	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	resp, err := client.ReportOutcome(context.Background(), envelope.CaseID, &oracul.OutcomeRequest{
+		Result: result,
+		Note:   note,
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Outcome reported: %s → %s\n", resp.CaseID, result)
+	if resp.Message != "" {
+		_, _ = fmt.Fprintf(stdout, "  %s\n", resp.Message)
+	}
+
+	// Annotate the flight log if a matching record exists.
+	rec, recErr := flight.NewRecorder()
+	if recErr == nil {
+		_ = rec.Annotate(item.ID, result, note)
+	}
+
+	return 0
+}
+
 func runCompletion(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: vectorpad completion <bash|zsh|fish>")
@@ -1014,7 +1116,7 @@ _vectorpad() {
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        COMPREPLY=($(compgen -W "tui add stash version completion log config submit export precedent" -- "${cur}"))
+        COMPREPLY=($(compgen -W "tui add stash version completion log config submit export precedent outcome" -- "${cur}"))
         return 0
     fi
 
@@ -1043,6 +1145,7 @@ _vectorpad() {
         'submit:submit case to Oracul for deliberation'
         'export:export classified case as JSON'
         'precedent:search for similar past decisions'
+        'outcome:report outcome for a past verdict'
     )
 
     _arguments -C \
@@ -1078,6 +1181,7 @@ complete -c vectorpad -n '__fish_use_subcommand' -a config -d 'Get or set config
 complete -c vectorpad -n '__fish_use_subcommand' -a submit -d 'Submit case to Oracul'
 complete -c vectorpad -n '__fish_use_subcommand' -a export -d 'Export classified case'
 complete -c vectorpad -n '__fish_use_subcommand' -a precedent -d 'Search similar past decisions'
+complete -c vectorpad -n '__fish_use_subcommand' -a outcome -d 'Report outcome for a past verdict'
 complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 `
 

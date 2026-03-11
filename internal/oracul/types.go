@@ -82,6 +82,19 @@ type PrecedentSearch struct {
 	RefClassSummary *RefClassSummary  `json:"reference_class_summary,omitempty"`
 }
 
+// OutcomeRequest is the JSON body for POST /v1/cases/:id/outcome.
+type OutcomeRequest struct {
+	Result string `json:"result"` // success, failure, partial
+	Note   string `json:"note,omitempty"`
+}
+
+// OutcomeResponse is the response from the outcome endpoint.
+type OutcomeResponse struct {
+	CaseID  string `json:"case_id"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool
