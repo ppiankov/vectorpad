@@ -86,6 +86,67 @@ func TestConsultRateLimit(t *testing.T) {
 	}
 }
 
+func TestAccountSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/account" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %q", r.Method)
+		}
+		if r.Header.Get("X-Oracul-Key") != "test_key" {
+			t.Errorf("auth header = %q", r.Header.Get("X-Oracul-Key"))
+		}
+		_ = json.NewEncoder(w).Encode(AccountStatus{
+			Tier:             "standard",
+			SubmissionsToday: 7,
+			DailyLimit:       15,
+			ResetsAt:         "2026-03-11T00:00:00Z",
+			Active:           true,
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test_key")
+	status, err := client.Account(context.Background())
+	if err != nil {
+		t.Fatalf("Account: %v", err)
+	}
+	if status.Tier != "standard" {
+		t.Errorf("tier = %q", status.Tier)
+	}
+	if status.SubmissionsToday != 7 {
+		t.Errorf("submissions_today = %d", status.SubmissionsToday)
+	}
+	if status.DailyLimit != 15 {
+		t.Errorf("daily_limit = %d", status.DailyLimit)
+	}
+	if !status.Active {
+		t.Error("expected active=true")
+	}
+}
+
+func TestAccountUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid key"})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "bad_key")
+	_, err := client.Account(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 401 {
+		t.Errorf("status = %d, want 401", apiErr.StatusCode)
+	}
+}
+
 func TestPreflightSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/preflight" {

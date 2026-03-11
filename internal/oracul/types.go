@@ -35,6 +35,15 @@ type PreflightResult struct {
 	Warnings      []string `json:"warnings,omitempty"`
 }
 
+// AccountStatus mirrors Oracul's GET /v1/account response.
+type AccountStatus struct {
+	Tier             string `json:"tier"`
+	SubmissionsToday int    `json:"submissions_today"`
+	DailyLimit       int    `json:"daily_limit"`
+	ResetsAt         string `json:"resets_at"`
+	Active           bool   `json:"active"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool

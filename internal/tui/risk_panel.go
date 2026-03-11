@@ -11,6 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
+	"github.com/ppiankov/vectorpad/internal/oracul"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/scopedecl"
 )
@@ -26,6 +27,7 @@ type riskPanel struct {
 	decomposeResult    decompose.Result
 	feedback           *detect.Feedback
 	decisionEcon       *detect.DecisionEcon
+	accountStatus      *oracul.AccountStatus
 	width              int
 	height             int
 }
@@ -238,6 +240,44 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		if len(p.decisionEcon.PerEpoch) > 0 {
 			latest := p.decisionEcon.PerEpoch[len(p.decisionEcon.PerEpoch)-1]
 			b.WriteString(styleDim.Render(fmt.Sprintf("  epoch %d: CPD $%.4f TTC %d CDR %.3f", latest.Epoch, latest.CPD, latest.TTC, latest.CDR)))
+			b.WriteString("\n")
+		}
+	}
+
+	// Oracul account status — only when configured and fetched.
+	if p.accountStatus != nil {
+		b.WriteString("\n")
+		b.WriteString(stylePanelTitle.Render("ORACUL"))
+		b.WriteString("\n")
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  tier: %s", p.accountStatus.Tier)))
+		b.WriteString("\n")
+		used := p.accountStatus.SubmissionsToday
+		limit := p.accountStatus.DailyLimit
+		usageStyle := styleSuccess
+		if limit > 0 {
+			pct := float64(used) / float64(limit)
+			if pct >= 1.0 {
+				usageStyle = styleError
+			} else if pct >= 0.8 {
+				usageStyle = styleWarning
+			}
+		}
+		b.WriteString(usageStyle.Render(fmt.Sprintf("  usage: %d/%d", used, limit)))
+		if limit > 0 {
+			filled := used * 10 / limit
+			if filled > 10 {
+				filled = 10
+			}
+			bar := strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
+			b.WriteString("  " + usageStyle.Render(bar))
+		}
+		b.WriteString("\n")
+		if p.accountStatus.ResetsAt != "" {
+			b.WriteString(styleDim.Render(fmt.Sprintf("  resets: %s", p.accountStatus.ResetsAt)))
+			b.WriteString("\n")
+		}
+		if !p.accountStatus.Active {
+			b.WriteString(styleError.Render("  ACCOUNT INACTIVE"))
 			b.WriteString("\n")
 		}
 	}
