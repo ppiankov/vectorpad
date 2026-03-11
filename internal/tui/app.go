@@ -35,22 +35,54 @@ const (
 	breakpointRisk  = 120 // risk collapses to status bar below this
 )
 
+// preflightStatus represents the current state of the live preflight check.
+type preflightStatus int
+
+const (
+	preflightIdle     preflightStatus = iota // no key or no text
+	preflightPending                         // debounce timer running
+	preflightChecking                        // API call in progress
+	preflightReady                           // passed clean
+	preflightWarn                            // passed with warnings
+	preflightBlocked                         // rejected
+)
+
+// preflightState tracks the debounced live preflight indicator.
+type preflightState struct {
+	status   preflightStatus
+	warnings []string
+	reason   string
+	textHash string // hash of text that was last checked
+	seq      int    // debounce sequence number to discard stale ticks
+}
+
+// preflightTickMsg fires after the debounce period.
+type preflightTickMsg struct{ seq int }
+
+// preflightResultMsg carries the async preflight result back to Update.
+type preflightResultMsg struct {
+	gate     *oracul.GateResult
+	err      error
+	textHash string
+}
+
 // AppModel is the top-level Bubbletea model for the three-panel TUI.
 type AppModel struct {
-	focus    panel
-	stash    stashPanel
-	editor   editorPanel
-	risk     riskPanel
-	help     helpModel
-	launch   launchOverlay
-	scope    scopeOverlay
-	store    *stash.Store
-	recorder *flight.Recorder
-	caps     detect.Capabilities
-	pwMode   detect.PastewatchMode
-	lastScan detect.ScanResult
-	width    int
-	height   int
+	focus     panel
+	stash     stashPanel
+	editor    editorPanel
+	risk      riskPanel
+	help      helpModel
+	launch    launchOverlay
+	scope     scopeOverlay
+	store     *stash.Store
+	recorder  *flight.Recorder
+	caps      detect.Capabilities
+	pwMode    detect.PastewatchMode
+	lastScan  detect.ScanResult
+	preflight preflightState
+	width     int
+	height    int
 }
 
 // NewApp creates the application model. store may be nil if stash is unavailable.
@@ -115,6 +147,57 @@ func (m *AppModel) refreshAccountStatus() {
 	m.risk.accountStatus = status
 }
 
+// maybeSchedulePreflight resets the debounce timer if text changed and Oracul key is configured.
+// Wraps the editor cmd so both fire.
+func (m *AppModel) maybeSchedulePreflight(editorCmd tea.Cmd) tea.Cmd {
+	text := m.editor.value()
+	hash := textFingerprint(text)
+	if hash == m.preflight.textHash || text == "" {
+		return editorCmd
+	}
+	// Text changed — reset debounce.
+	m.preflight.textHash = hash
+	m.preflight.seq++
+	m.preflight.status = preflightPending
+	m.risk.preflightReadiness = nil
+	seq := m.preflight.seq
+	tickCmd := tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		return preflightTickMsg{seq: seq}
+	})
+	if editorCmd != nil {
+		return tea.Batch(editorCmd, tickCmd)
+	}
+	return tickCmd
+}
+
+// startPreflightCheck fires an async preflight API call if Oracul key is configured.
+func (m *AppModel) startPreflightCheck() tea.Cmd {
+	cfg, err := config.Load()
+	if err != nil || cfg.Oracul.APIKey == "" {
+		m.preflight.status = preflightIdle
+		return nil
+	}
+	m.preflight.status = preflightChecking
+	text := m.editor.value()
+	hash := m.preflight.textHash
+	sentences := m.editor.sentences
+	return func() tea.Msg {
+		filing := oracul.MapSentences(sentences)
+		question := oracul.ExtractQuestion(sentences, text)
+		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+		gate, err := client.PreflightGate(context.Background(), question, filing)
+		return preflightResultMsg{gate: gate, err: err, textHash: hash}
+	}
+}
+
+// textFingerprint returns a cheap fingerprint of the text for change detection.
+func textFingerprint(text string) string {
+	if len(text) <= 100 {
+		return text
+	}
+	return fmt.Sprintf("%d:%s...%s", len(text), text[:50], text[len(text)-50:])
+}
+
 func (m *AppModel) loadStash() {
 	if m.store == nil {
 		return
@@ -132,6 +215,38 @@ func (m AppModel) Init() tea.Cmd {
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case preflightTickMsg:
+		// Debounce expired — start async preflight if seq matches.
+		if msg.seq != m.preflight.seq {
+			return m, nil
+		}
+		return m, m.startPreflightCheck()
+
+	case preflightResultMsg:
+		// Async preflight result arrived.
+		if msg.textHash != m.preflight.textHash {
+			return m, nil // text changed since check started, discard
+		}
+		if msg.err != nil {
+			m.preflight.status = preflightIdle
+			return m, nil
+		}
+		m.risk.preflightReadiness = msg.gate
+		if !msg.gate.Allowed {
+			m.preflight.status = preflightBlocked
+			m.preflight.reason = msg.gate.Reason
+			m.preflight.warnings = nil
+		} else if len(msg.gate.Warnings) > 0 {
+			m.preflight.status = preflightWarn
+			m.preflight.warnings = msg.gate.Warnings
+			m.preflight.reason = ""
+		} else {
+			m.preflight.status = preflightReady
+			m.preflight.warnings = nil
+			m.preflight.reason = ""
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -213,7 +328,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focus == panelEditor {
 		cmd := m.editor.update(msg)
 		m.syncRisk()
-		return m, cmd
+		return m, m.maybeSchedulePreflight(cmd)
 	}
 
 	return m, nil
@@ -243,7 +358,7 @@ func (m *AppModel) updateEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Editor gets all remaining keys as text input.
 	cmd := m.editor.update(msg)
 	m.syncRisk()
-	return m, cmd
+	return m, m.maybeSchedulePreflight(cmd)
 }
 
 func (m *AppModel) cycleFocus(direction int) {
