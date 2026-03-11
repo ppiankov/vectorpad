@@ -147,6 +147,112 @@ func TestAccountUnauthorized(t *testing.T) {
 	}
 }
 
+func TestSearchPrecedentsSuccess(t *testing.T) {
+	boolTrue := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/precedents/search" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %q", r.Method)
+		}
+		if r.URL.Query().Get("q") != "Should we use Kafka?" {
+			t.Errorf("q = %q", r.URL.Query().Get("q"))
+		}
+		if r.URL.Query().Get("limit") != "3" {
+			t.Errorf("limit = %q", r.URL.Query().Get("limit"))
+		}
+		_ = json.NewEncoder(w).Encode(PrecedentSearch{
+			Precedents: []PrecedentResult{
+				{
+					CaseID:          "case-001",
+					Question:        "Should we use Kafka for events?",
+					SimilarityScore: 0.72,
+					Confidence:      0.85,
+					OutcomeCount:    3,
+					Predictions: []PrecedentPrediction{
+						{Statement: "ops burden < 10h/month", Probability: 0.8, Resolved: true, Correct: &boolTrue},
+					},
+				},
+				{
+					CaseID:          "case-002",
+					Question:        "RabbitMQ vs SQS",
+					SimilarityScore: 0.58,
+					Confidence:      0.70,
+				},
+			},
+			TotalSimilar: 12,
+			RefClassSummary: &RefClassSummary{
+				TotalCases:    12,
+				ResolvedCases: 8,
+				SuccessRate:   0.625,
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test_key")
+	result, err := client.SearchPrecedents(context.Background(), "Should we use Kafka?", 3)
+	if err != nil {
+		t.Fatalf("SearchPrecedents: %v", err)
+	}
+	if len(result.Precedents) != 2 {
+		t.Errorf("precedents count = %d, want 2", len(result.Precedents))
+	}
+	if result.TotalSimilar != 12 {
+		t.Errorf("total_similar = %d", result.TotalSimilar)
+	}
+	if result.RefClassSummary == nil {
+		t.Fatal("expected ref class summary")
+	}
+	if result.RefClassSummary.SuccessRate != 0.625 {
+		t.Errorf("success_rate = %f", result.RefClassSummary.SuccessRate)
+	}
+	if result.Precedents[0].SimilarityScore != 0.72 {
+		t.Errorf("similarity = %f", result.Precedents[0].SimilarityScore)
+	}
+}
+
+func TestSearchPrecedentsEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(PrecedentSearch{
+			Precedents:   []PrecedentResult{},
+			TotalSimilar: 0,
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "key")
+	result, err := client.SearchPrecedents(context.Background(), "test", 5)
+	if err != nil {
+		t.Fatalf("SearchPrecedents: %v", err)
+	}
+	if len(result.Precedents) != 0 {
+		t.Errorf("expected empty, got %d", len(result.Precedents))
+	}
+}
+
+func TestSearchPrecedentsAuthError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid key"})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "bad_key")
+	_, err := client.SearchPrecedents(context.Background(), "test", 5)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 401 {
+		t.Errorf("status = %d, want 401", apiErr.StatusCode)
+	}
+}
+
 func TestPreflightSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/preflight" {

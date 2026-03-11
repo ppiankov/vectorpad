@@ -66,6 +66,33 @@ type preflightResultMsg struct {
 	textHash string
 }
 
+// precedentStatus represents the current state of the precedent search.
+type precedentStatus int
+
+const (
+	precedentIdle precedentStatus = iota
+	precedentPending
+	precedentLoading
+	precedentLoaded
+)
+
+// precedentState tracks the debounced precedent search.
+type precedentState struct {
+	status   precedentStatus
+	textHash string
+	seq      int
+}
+
+// precedentTickMsg fires after the precedent debounce period.
+type precedentTickMsg struct{ seq int }
+
+// precedentResultMsg carries the async precedent search result back to Update.
+type precedentResultMsg struct {
+	search   *oracul.PrecedentSearch
+	err      error
+	textHash string
+}
+
 // AppModel is the top-level Bubbletea model for the three-panel TUI.
 type AppModel struct {
 	focus     panel
@@ -81,6 +108,7 @@ type AppModel struct {
 	pwMode    detect.PastewatchMode
 	lastScan  detect.ScanResult
 	preflight preflightState
+	precedent precedentState
 	width     int
 	height    int
 }
@@ -198,6 +226,46 @@ func textFingerprint(text string) string {
 	return fmt.Sprintf("%d:%s...%s", len(text), text[:50], text[len(text)-50:])
 }
 
+// maybeSchedulePrecedent resets the precedent debounce timer if text changed.
+func (m *AppModel) maybeSchedulePrecedent(editorCmd tea.Cmd) tea.Cmd {
+	text := m.editor.value()
+	hash := textFingerprint(text)
+	if hash == m.precedent.textHash || text == "" {
+		return editorCmd
+	}
+	m.precedent.textHash = hash
+	m.precedent.seq++
+	m.precedent.status = precedentPending
+	m.risk.precedentSearch = nil
+	seq := m.precedent.seq
+	tickCmd := tea.Tick(3*time.Second, func(_ time.Time) tea.Msg {
+		return precedentTickMsg{seq: seq}
+	})
+	if editorCmd != nil {
+		return tea.Batch(editorCmd, tickCmd)
+	}
+	return tickCmd
+}
+
+// startPrecedentSearch fires an async precedent search if Oracul key is configured.
+func (m *AppModel) startPrecedentSearch() tea.Cmd {
+	cfg, err := config.Load()
+	if err != nil || cfg.Oracul.APIKey == "" {
+		m.precedent.status = precedentIdle
+		return nil
+	}
+	m.precedent.status = precedentLoading
+	text := m.editor.value()
+	hash := m.precedent.textHash
+	sentences := m.editor.sentences
+	return func() tea.Msg {
+		question := oracul.ExtractQuestion(sentences, text)
+		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+		search, err := client.SearchPrecedents(context.Background(), question, 3)
+		return precedentResultMsg{search: search, err: err, textHash: hash}
+	}
+}
+
 func (m *AppModel) loadStash() {
 	if m.store == nil {
 		return
@@ -245,6 +313,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.preflight.warnings = nil
 			m.preflight.reason = ""
 		}
+		return m, nil
+
+	case precedentTickMsg:
+		if msg.seq != m.precedent.seq {
+			return m, nil
+		}
+		return m, m.startPrecedentSearch()
+
+	case precedentResultMsg:
+		if msg.textHash != m.precedent.textHash {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.precedent.status = precedentIdle
+			return m, nil
+		}
+		m.precedent.status = precedentLoaded
+		m.risk.precedentSearch = msg.search
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -328,7 +414,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focus == panelEditor {
 		cmd := m.editor.update(msg)
 		m.syncRisk()
-		return m, m.maybeSchedulePreflight(cmd)
+		cmd = m.maybeSchedulePreflight(cmd)
+		return m, m.maybeSchedulePrecedent(cmd)
 	}
 
 	return m, nil
@@ -358,7 +445,8 @@ func (m *AppModel) updateEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Editor gets all remaining keys as text input.
 	cmd := m.editor.update(msg)
 	m.syncRisk()
-	return m, m.maybeSchedulePreflight(cmd)
+	cmd = m.maybeSchedulePreflight(cmd)
+	return m, m.maybeSchedulePrecedent(cmd)
 }
 
 func (m *AppModel) cycleFocus(direction int) {

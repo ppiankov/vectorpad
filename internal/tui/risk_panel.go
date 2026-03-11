@@ -29,6 +29,7 @@ type riskPanel struct {
 	decisionEcon       *detect.DecisionEcon
 	accountStatus      *oracul.AccountStatus
 	preflightReadiness *oracul.GateResult
+	precedentSearch    *oracul.PrecedentSearch
 	width              int
 	height             int
 }
@@ -293,6 +294,43 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 			b.WriteString("\n")
 		} else {
 			b.WriteString(styleSuccess.Render("  oracul: READY"))
+			b.WriteString("\n")
+		}
+	}
+
+	// Precedent search results — shown when available.
+	if p.precedentSearch != nil && len(p.precedentSearch.Precedents) > 0 {
+		b.WriteString("\n")
+		header := "PRECEDENTS"
+		if p.precedentSearch.TotalSimilar > 0 {
+			header = fmt.Sprintf("PRECEDENTS (%d of %d similar)", len(p.precedentSearch.Precedents), p.precedentSearch.TotalSimilar)
+		}
+		b.WriteString(stylePanelTitle.Render(header))
+		b.WriteString("\n")
+		for _, pr := range p.precedentSearch.Precedents {
+			dot := "○"
+			if pr.OutcomeCount > 0 {
+				dot = "●"
+			}
+			q := pr.Question
+			if len(q) > 45 {
+				q = q[:42] + "..."
+			}
+			simStyle := styleMuted
+			if pr.SimilarityScore >= 0.6 {
+				simStyle = styleWarning
+			}
+			b.WriteString(simStyle.Render(fmt.Sprintf("  %.2f %s %s", pr.SimilarityScore, dot, q)))
+			b.WriteString("\n")
+			detail := fmt.Sprintf("       confidence: %.2f", pr.Confidence)
+			if pr.OutcomeCount > 0 {
+				detail += fmt.Sprintf("  outcomes: %d (%.0f%% correct)", pr.OutcomeCount, pr.OutcomeCorrectRate*100)
+			}
+			b.WriteString(styleDim.Render(detail))
+			b.WriteString("\n")
+		}
+		if rc := p.precedentSearch.RefClassSummary; rc != nil {
+			b.WriteString(styleDim.Render(fmt.Sprintf("  ref class: %d/%d resolved, %.1f%% success", rc.ResolvedCases, rc.TotalCases, rc.SuccessRate*100)))
 			b.WriteString("\n")
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,6 +54,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runSubmit(args[2:], stdin, stdout, stderr)
 		case "export":
 			return runExport(args[2:], stdin, stdout, stderr)
+		case "precedent":
+			return runPrecedent(args[2:], stdin, stdout, stderr)
 		}
 	}
 
@@ -824,6 +827,102 @@ func runExport(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	return 0
 }
 
+func runPrecedent(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	limit := 5
+	jsonOutput := false
+	var query string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--limit":
+			if i+1 < len(args) {
+				i++
+				n, err := strconv.Atoi(args[i])
+				if err == nil && n > 0 && n <= 20 {
+					limit = n
+				}
+			}
+		case "--json":
+			jsonOutput = true
+		default:
+			query = args[i]
+		}
+	}
+
+	// Read from stdin if no positional arg.
+	if query == "" {
+		input, err := io.ReadAll(stdin)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		query = strings.TrimSpace(string(input))
+	}
+	if query == "" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad precedent [--limit N] [--json] <question>")
+		return 1
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if cfg.Oracul.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+		return 1
+	}
+
+	// Extract question from classified text.
+	sentences := classifier.Classify(query)
+	question := oracul.ExtractQuestion(sentences, query)
+
+	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	result, err := client.SearchPrecedents(context.Background(), question, limit)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return 0
+	}
+
+	// Human-readable output.
+	if len(result.Precedents) == 0 {
+		_, _ = fmt.Fprintln(stdout, "No precedents found.")
+		return 0
+	}
+
+	_, _ = fmt.Fprintf(stdout, "Found %d precedents (%d similar cases):\n\n", len(result.Precedents), result.TotalSimilar)
+	for i, pr := range result.Precedents {
+		_, _ = fmt.Fprintf(stdout, "%d. [%.2f] %s\n", i+1, pr.SimilarityScore, pr.Question)
+		_, _ = fmt.Fprintf(stdout, "   Status: %s | Confidence: %.2f\n", pr.VerdictStatus, pr.Confidence)
+		if pr.OutcomeCount > 0 {
+			_, _ = fmt.Fprintf(stdout, "   Outcomes: %d (%.0f%% correct)\n", pr.OutcomeCount, pr.OutcomeCorrectRate*100)
+		}
+		if len(pr.ClaimFamilies) > 0 {
+			_, _ = fmt.Fprintf(stdout, "   Families: %s\n", strings.Join(pr.ClaimFamilies, ", "))
+		}
+		_, _ = fmt.Fprintln(stdout)
+	}
+
+	if rc := result.RefClassSummary; rc != nil {
+		_, _ = fmt.Fprintf(stdout, "Reference class: %d/%d resolved, %.1f%% success\n", rc.ResolvedCases, rc.TotalCases, rc.SuccessRate*100)
+		if len(rc.TopClaimFamilies) > 0 {
+			_, _ = fmt.Fprintf(stdout, "Top families: %s\n", strings.Join(rc.TopClaimFamilies, ", "))
+		}
+	}
+
+	return 0
+}
+
 func runCompletion(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: vectorpad completion <bash|zsh|fish>")
@@ -849,7 +948,7 @@ _vectorpad() {
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        COMPREPLY=($(compgen -W "tui add stash version completion log config submit export" -- "${cur}"))
+        COMPREPLY=($(compgen -W "tui add stash version completion log config submit export precedent" -- "${cur}"))
         return 0
     fi
 
@@ -877,6 +976,7 @@ _vectorpad() {
         'config:get or set configuration'
         'submit:submit case to Oracul for deliberation'
         'export:export classified case as JSON'
+        'precedent:search for similar past decisions'
     )
 
     _arguments -C \
@@ -911,6 +1011,7 @@ complete -c vectorpad -n '__fish_use_subcommand' -a stash -d 'Manage claim regis
 complete -c vectorpad -n '__fish_use_subcommand' -a config -d 'Get or set configuration'
 complete -c vectorpad -n '__fish_use_subcommand' -a submit -d 'Submit case to Oracul'
 complete -c vectorpad -n '__fish_use_subcommand' -a export -d 'Export classified case'
+complete -c vectorpad -n '__fish_use_subcommand' -a precedent -d 'Search similar past decisions'
 complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 `
 
