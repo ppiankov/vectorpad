@@ -220,6 +220,8 @@ VectorPad is the authoring tool. Oracul is the deliberation engine. Git is the l
 - [x] Phase 6 - scope declaration, pressure heat map, vector decomposition, contextspectre feedback loop
 - [x] Phase 7 - claim registry (SQLite stash, Ollama embeddings, cosine similarity)
 - [x] Phase 8 - Oracul integration (submit, export, config, preflight gate)
+- [x] Phase 9 - Oracul TUI experience (account status, launch target, live preflight, verdict stash)
+- [ ] Phase 10 - decision memory (precedent search, async submit, outcome tracking, verdict diff)
 
 ## License
 
