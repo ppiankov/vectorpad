@@ -21,8 +21,9 @@ const (
 type Source string
 
 const (
-	SourceCLI   Source = "cli"
-	SourcePaste Source = "paste"
+	SourceCLI     Source = "cli"
+	SourcePaste   Source = "paste"
+	SourceVerdict Source = "verdict"
 )
 
 type AgeTier string
@@ -61,6 +62,7 @@ const (
 	ItemTypeQuestion   ItemType = "question"
 	ItemTypePattern    ItemType = "pattern"
 	ItemTypeConstraint ItemType = "constraint"
+	ItemTypeVerdict    ItemType = "verdict"
 )
 
 type Item struct {
