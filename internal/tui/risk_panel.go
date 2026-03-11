@@ -28,6 +28,7 @@ type riskPanel struct {
 	feedback           *detect.Feedback
 	decisionEcon       *detect.DecisionEcon
 	accountStatus      *oracul.AccountStatus
+	preflightReadiness *oracul.GateResult
 	width              int
 	height             int
 }
@@ -278,6 +279,20 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 		if !p.accountStatus.Active {
 			b.WriteString(styleError.Render("  ACCOUNT INACTIVE"))
+			b.WriteString("\n")
+		}
+	}
+
+	// Live preflight readiness — shown below ORACUL section when available.
+	if p.preflightReadiness != nil {
+		if !p.preflightReadiness.Allowed {
+			b.WriteString(styleError.Render(fmt.Sprintf("  oracul: BLOCKED — %s", p.preflightReadiness.Reason)))
+			b.WriteString("\n")
+		} else if len(p.preflightReadiness.Warnings) > 0 {
+			b.WriteString(styleWarning.Render(fmt.Sprintf("  oracul: WARN — %s", p.preflightReadiness.Warnings[0])))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(styleSuccess.Render("  oracul: READY"))
 			b.WriteString("\n")
 		}
 	}
