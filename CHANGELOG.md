@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-03-10
+
+### Added
+- Verdict history in stash: Oracul verdicts auto-stashed after successful submit
+- Distinct `◆` symbol for verdict entries in TUI stash panel and CLI list
+- `SourceVerdict` and `ItemTypeVerdict` types for verdict classification
+- `stash list --type verdict` filters to verdict entries only
+- `stash show <id>` renders full verdict JSON for verdict entries
+
 ## [0.13.0] - 2026-03-10
 
 ### Added
