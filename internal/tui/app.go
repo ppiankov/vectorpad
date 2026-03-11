@@ -96,6 +96,7 @@ type deliberationState struct {
 	status    deliberationStatus
 	startTime time.Time
 	cancel    context.CancelFunc
+	flightID  string // ID of the flight record to update with Oracul data
 }
 
 // deliberationTickMsg fires every second to update the elapsed timer.
@@ -105,6 +106,7 @@ type deliberationTickMsg struct{}
 type deliberationResultMsg struct {
 	statusMsg string
 	err       error
+	oracul    *flight.OraculSnapshot
 }
 
 // precedentTickMsg fires after the precedent debounce period.
@@ -372,8 +374,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case deliberationResultMsg:
+		// Attach Oracul snapshot to flight record (best-effort).
+		if m.recorder != nil && m.deliberation.flightID != "" && msg.oracul != nil {
+			_ = m.recorder.UpdateOracul(m.deliberation.flightID, msg.oracul)
+		}
 		m.deliberation.status = deliberationIdle
 		m.deliberation.cancel = nil
+		m.deliberation.flightID = ""
 		m.editor.deliberationMsg = ""
 		if msg.err != nil {
 			m.editor.copyStatus = copyError
@@ -788,10 +795,11 @@ func (m *AppModel) executeLaunch(t *launchTarget) tea.Cmd {
 	}
 
 	// Record the launch in the flight log (before async path).
-	m.recordLaunch(t.name, payload)
+	flightID := m.recordLaunch(t.name, payload)
 
 	// Oracul Council: async non-blocking submit.
 	if t.name == "Oracul Council" {
+		m.deliberation.flightID = flightID
 		return m.startDeliberation(payload)
 	}
 
@@ -830,6 +838,10 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 	// Capture state for the goroutine.
 	sentences := m.editor.sentences
 	text := payload
+	precedentCount := 0
+	if m.risk.precedentSearch != nil {
+		precedentCount = len(m.risk.precedentSearch.Precedents)
+	}
 
 	submitCmd := func() tea.Msg {
 		cfg, err := config.Load()
@@ -850,7 +862,22 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 			return deliberationResultMsg{err: fmt.Errorf("preflight: %w", err)}
 		}
 		if !gate.Allowed {
-			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason)}
+			snap := &flight.OraculSnapshot{Preflight: "REJECTED"}
+			if gate.Tier != "" {
+				snap.Tier = gate.Tier
+			}
+			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason), oracul: snap}
+		}
+
+		// Build Oracul snapshot from preflight gate.
+		snap := &flight.OraculSnapshot{
+			Tier:           gate.Tier,
+			Preflight:      "ACCEPTED",
+			Warnings:       gate.Warnings,
+			PrecedentCount: precedentCount,
+		}
+		if gate.Quality > 0 {
+			snap.FilingQuality = gate.Quality
 		}
 
 		// Submit for deliberation.
@@ -859,13 +886,13 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 			Filing:   filing,
 		})
 		if err != nil {
-			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err)}
+			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err), oracul: snap}
 		}
 
 		// Auto-stash the verdict.
 		stashVerdict(raw, question)
 
-		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate)}
+		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate), oracul: snap}
 	}
 
 	tickCmd := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
@@ -875,28 +902,32 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 	return tea.Batch(submitCmd, tickCmd)
 }
 
-// recordLaunch appends a flight record for the launch.
-func (m *AppModel) recordLaunch(target, payload string) {
-	if m.recorder != nil {
-		ns := negativespace.Analyze(payload)
-		var gapClasses []string
-		for _, g := range ns.Gaps {
-			gapClasses = append(gapClasses, string(g.Class))
-		}
-		_ = m.recorder.Append(flight.Record{
-			Target: target,
-			Text:   payload,
-			Metrics: flight.MetricsSnapshot{
-				Tokens:    m.editor.metrics.TokenWeight.Estimated,
-				Integrity: m.editor.metrics.VectorIntegrity.Ratio,
-				CPD:       m.editor.metrics.CPDProjection,
-				TTC:       m.editor.metrics.TTCProjection,
-				CDR:       m.editor.metrics.CDRProjection,
-			},
-			Gaps:       gapClasses,
-			VagueVerbs: m.risk.result.VagueVerbs,
-		})
+// recordLaunch appends a flight record for the launch and returns its ID.
+func (m *AppModel) recordLaunch(target, payload string) string {
+	if m.recorder == nil {
+		return ""
 	}
+	ns := negativespace.Analyze(payload)
+	var gapClasses []string
+	for _, g := range ns.Gaps {
+		gapClasses = append(gapClasses, string(g.Class))
+	}
+	rec := flight.Record{
+		ID:     flight.GenerateID(),
+		Target: target,
+		Text:   payload,
+		Metrics: flight.MetricsSnapshot{
+			Tokens:    m.editor.metrics.TokenWeight.Estimated,
+			Integrity: m.editor.metrics.VectorIntegrity.Ratio,
+			CPD:       m.editor.metrics.CPDProjection,
+			TTC:       m.editor.metrics.TTCProjection,
+			CDR:       m.editor.metrics.CDRProjection,
+		},
+		Gaps:       gapClasses,
+		VagueVerbs: m.risk.result.VagueVerbs,
+	}
+	_ = m.recorder.Append(rec)
+	return rec.ID
 }
 
 func (m AppModel) View() string {

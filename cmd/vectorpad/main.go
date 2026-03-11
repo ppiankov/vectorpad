@@ -214,6 +214,18 @@ func runLog(args []string, stdout io.Writer, stderr io.Writer) int {
 				_, _ = fmt.Fprintf(stdout, "  %s: %d\n", g.Class, g.Count)
 			}
 		}
+		if stats.Oracul != nil {
+			_, _ = fmt.Fprintln(stdout, "Oracul:")
+			_, _ = fmt.Fprintf(stdout, "  submits: %d\n", stats.Oracul.TotalSubmits)
+			_, _ = fmt.Fprintf(stdout, "  avg filing quality: %.0f%%\n", stats.Oracul.AvgFilingQuality*100)
+			_, _ = fmt.Fprintf(stdout, "  rejection rate: %.0f%%\n", stats.Oracul.RejectionRate*100)
+			if len(stats.Oracul.TopWarnings) > 0 {
+				_, _ = fmt.Fprintln(stdout, "  top warnings:")
+				for _, w := range stats.Oracul.TopWarnings {
+					_, _ = fmt.Fprintf(stdout, "    %s: %d\n", w.Class, w.Count)
+				}
+			}
+		}
 		return 0
 	}
 
