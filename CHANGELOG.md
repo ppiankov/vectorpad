@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0] - 2026-03-10
+
+### Added
+- Oracul metadata in flight recorder: tier, filing quality, preflight result, warnings, precedent count
+- `vectorpad log --stats` shows Oracul aggregates: submits, avg filing quality, rejection rate, top warnings
+- `UpdateOracul()` method on Recorder for attaching async verdict data to flight records
+
 ## [0.16.0] - 2026-03-10
 
 ### Added

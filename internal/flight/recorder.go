@@ -23,6 +23,16 @@ type Record struct {
 	VagueVerbs []string        `json:"vague_verbs,omitempty"`
 	Outcome    string          `json:"outcome,omitempty"` // good, bad, partial, or empty
 	Note       string          `json:"note,omitempty"`
+	Oracul     *OraculSnapshot `json:"oracul,omitempty"`
+}
+
+// OraculSnapshot captures Oracul-specific metadata for a flight record.
+type OraculSnapshot struct {
+	Tier           string   `json:"tier,omitempty"`
+	FilingQuality  float64  `json:"filing_quality,omitempty"`
+	Preflight      string   `json:"preflight,omitempty"` // ACCEPTED or REJECTED
+	Warnings       []string `json:"warnings,omitempty"`
+	PrecedentCount int      `json:"precedent_count,omitempty"`
 }
 
 // MetricsSnapshot captures the key metrics at launch time.
@@ -41,6 +51,15 @@ type Stats struct {
 	OutcomeCounts   map[string]int     `json:"outcome_counts"`
 	AvgCDRByOutcome map[string]float64 `json:"avg_cdr_by_outcome"`
 	TopGaps         []GapFrequency     `json:"top_gaps,omitempty"`
+	Oracul          *OraculStats       `json:"oracul,omitempty"`
+}
+
+// OraculStats holds aggregate Oracul-specific analysis.
+type OraculStats struct {
+	TotalSubmits     int            `json:"total_submits"`
+	AvgFilingQuality float64        `json:"avg_filing_quality"`
+	RejectionRate    float64        `json:"rejection_rate"`
+	TopWarnings      []GapFrequency `json:"top_warnings,omitempty"`
 }
 
 // GapFrequency records how often a gap class appears.
@@ -89,6 +108,21 @@ func (r *Recorder) Append(rec Record) error {
 
 	_, err = f.Write(append(data, '\n'))
 	return err
+}
+
+// UpdateOracul attaches Oracul metadata to an existing flight record.
+func (r *Recorder) UpdateOracul(id string, snap *OraculSnapshot) error {
+	records, err := r.loadAll()
+	if err != nil {
+		return err
+	}
+	for i := range records {
+		if records[i].ID == id {
+			records[i].Oracul = snap
+			return r.writeAll(records)
+		}
+	}
+	return fmt.Errorf("record %s not found", id)
 }
 
 // Annotate sets the outcome and note for a record by ID.
@@ -179,6 +213,46 @@ func (r *Recorder) ComputeStats() (Stats, error) {
 		stats.TopGaps = stats.TopGaps[:5]
 	}
 
+	// Oracul stats.
+	var oraculSubmits int
+	var qualitySum float64
+	var qualityCount int
+	var rejections int
+	warnCounts := make(map[string]int)
+	for _, rec := range records {
+		if rec.Oracul == nil {
+			continue
+		}
+		oraculSubmits++
+		if rec.Oracul.FilingQuality > 0 {
+			qualitySum += rec.Oracul.FilingQuality
+			qualityCount++
+		}
+		if rec.Oracul.Preflight == "REJECTED" {
+			rejections++
+		}
+		for _, w := range rec.Oracul.Warnings {
+			warnCounts[w]++
+		}
+	}
+	if oraculSubmits > 0 {
+		os := &OraculStats{TotalSubmits: oraculSubmits}
+		if qualityCount > 0 {
+			os.AvgFilingQuality = qualitySum / float64(qualityCount)
+		}
+		os.RejectionRate = float64(rejections) / float64(oraculSubmits)
+		for w, count := range warnCounts {
+			os.TopWarnings = append(os.TopWarnings, GapFrequency{Class: w, Count: count})
+		}
+		sort.Slice(os.TopWarnings, func(i, j int) bool {
+			return os.TopWarnings[i].Count > os.TopWarnings[j].Count
+		})
+		if len(os.TopWarnings) > 5 {
+			os.TopWarnings = os.TopWarnings[:5]
+		}
+		stats.Oracul = os
+	}
+
 	return stats, nil
 }
 
@@ -234,6 +308,11 @@ func (r *Recorder) writeAll(records []Record) error {
 		return err
 	}
 	return os.Rename(tmp, r.path)
+}
+
+// GenerateID creates a random hex ID for a flight record.
+func GenerateID() string {
+	return generateID()
 }
 
 func generateID() string {
