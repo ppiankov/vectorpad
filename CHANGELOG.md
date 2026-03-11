@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2026-03-10
+
+### Added
+- Async Oracul submit: deliberation runs in background, TUI remains interactive
+- Elapsed timer display in editor panel during deliberation
+- Context cancellation on TUI quit cancels in-progress deliberation
+- Rejects duplicate submissions while deliberation is active
+
 ## [0.15.0] - 2026-03-10
 
 ### Added

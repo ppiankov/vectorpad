@@ -38,6 +38,7 @@ type editorPanel struct {
 	scopeResult        scopedecl.Result
 	pressureScores     []pressure.SentenceScore
 	decomposeResult    decompose.Result
+	deliberationMsg    string // async deliberation status line, set by app
 	attachments        []*attach.Attachment
 	attachCfgs         []attach.ExcerptConfig
 	copyStatus         copyStatus
@@ -274,6 +275,12 @@ func (p editorPanel) View(focused bool) string {
 	b.WriteString("\n")
 	b.WriteString(p.renderDashboard())
 	b.WriteString("\n")
+
+	// Deliberation status
+	if p.deliberationMsg != "" {
+		b.WriteString(styleWarning.Render(p.deliberationMsg))
+		b.WriteString("\n")
+	}
 
 	// Copy status
 	switch p.copyStatus {
