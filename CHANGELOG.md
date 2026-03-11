@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2026-03-10
+
+### Added
+- Oracul Council as launch target 6 in ctrl+l overlay: classify, preflight gate, submit, verdict summary
+- Target only visible when API key is configured; hidden otherwise
+
 ## [0.11.0] - 2026-03-10
 
 ### Added
