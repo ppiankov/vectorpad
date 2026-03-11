@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ppiankov/vectorpad/internal/classifier"
 	"github.com/ppiankov/vectorpad/internal/config"
 	"github.com/ppiankov/vectorpad/internal/oracul"
 	"github.com/ppiankov/vectorpad/internal/stash"
@@ -90,11 +88,12 @@ func newLaunchOverlay() launchOverlay {
 	}
 
 	// Target 6: Oracul Council — only available when API key is configured.
+	// Action is nil: async deliberation is handled by startDeliberation in app.go.
 	targets = append(targets, launchTarget{
 		key:       "6",
 		name:      "Oracul Council",
 		available: oraculKeyConfigured(),
-		action:    oraculSubmitAction,
+		action:    nil,
 	})
 
 	return launchOverlay{targets: targets}
@@ -107,49 +106,6 @@ func oraculKeyConfigured() bool {
 		return false
 	}
 	return cfg.Oracul.APIKey != ""
-}
-
-// oraculSubmitAction classifies the payload, runs preflight, and submits to Oracul.
-func oraculSubmitAction(payload string) (string, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return "", fmt.Errorf("load config: %w", err)
-	}
-	if cfg.Oracul.APIKey == "" {
-		return "", fmt.Errorf("no API key configured (run: vectorpad config set oracul.api_key <key>)")
-	}
-
-	// Classify and map to CaseFiling.
-	sentences := classifier.Classify(payload)
-	filing := oracul.MapSentences(sentences)
-	question := oracul.ExtractQuestion(sentences, payload)
-
-	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
-	req := &oracul.ConsultRequest{
-		Question: question,
-		Filing:   filing,
-	}
-
-	// Preflight gate.
-	gate, err := client.PreflightGate(context.Background(), question, filing)
-	if err != nil {
-		return "", fmt.Errorf("preflight: %w", err)
-	}
-	if !gate.Allowed {
-		return "", fmt.Errorf("REJECTED: %s", gate.Reason)
-	}
-
-	// Submit for deliberation.
-	raw, err := client.Consult(context.Background(), req)
-	if err != nil {
-		return "", fmt.Errorf("consult: %w", err)
-	}
-
-	// Auto-stash the verdict (best-effort — don't fail the submit).
-	stashVerdict(raw, question)
-
-	// Extract verdict summary for status message.
-	return formatVerdictSummary(raw, gate), nil
 }
 
 // stashVerdict saves the verdict JSON to the stash with a verdict: prefix.

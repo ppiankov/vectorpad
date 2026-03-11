@@ -83,6 +83,30 @@ type precedentState struct {
 	seq      int
 }
 
+// deliberationStatus represents the state of an async Oracul submit.
+type deliberationStatus int
+
+const (
+	deliberationIdle   deliberationStatus = iota
+	deliberationActive                    // API call in flight
+)
+
+// deliberationState tracks an in-progress Oracul deliberation.
+type deliberationState struct {
+	status    deliberationStatus
+	startTime time.Time
+	cancel    context.CancelFunc
+}
+
+// deliberationTickMsg fires every second to update the elapsed timer.
+type deliberationTickMsg struct{}
+
+// deliberationResultMsg carries the async Oracul verdict back to Update.
+type deliberationResultMsg struct {
+	statusMsg string
+	err       error
+}
+
 // precedentTickMsg fires after the precedent debounce period.
 type precedentTickMsg struct{ seq int }
 
@@ -95,22 +119,23 @@ type precedentResultMsg struct {
 
 // AppModel is the top-level Bubbletea model for the three-panel TUI.
 type AppModel struct {
-	focus     panel
-	stash     stashPanel
-	editor    editorPanel
-	risk      riskPanel
-	help      helpModel
-	launch    launchOverlay
-	scope     scopeOverlay
-	store     *stash.Store
-	recorder  *flight.Recorder
-	caps      detect.Capabilities
-	pwMode    detect.PastewatchMode
-	lastScan  detect.ScanResult
-	preflight preflightState
-	precedent precedentState
-	width     int
-	height    int
+	focus        panel
+	stash        stashPanel
+	editor       editorPanel
+	risk         riskPanel
+	help         helpModel
+	launch       launchOverlay
+	scope        scopeOverlay
+	store        *stash.Store
+	recorder     *flight.Recorder
+	caps         detect.Capabilities
+	pwMode       detect.PastewatchMode
+	lastScan     detect.ScanResult
+	preflight    preflightState
+	precedent    precedentState
+	deliberation deliberationState
+	width        int
+	height       int
 }
 
 // NewApp creates the application model. store may be nil if stash is unavailable.
@@ -333,6 +358,34 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.risk.precedentSearch = msg.search
 		return m, nil
 
+	case deliberationTickMsg:
+		if m.deliberation.status != deliberationActive {
+			m.editor.deliberationMsg = ""
+			return m, nil
+		}
+		// Update elapsed time display.
+		elapsed := time.Since(m.deliberation.startTime).Truncate(time.Second)
+		m.editor.deliberationMsg = fmt.Sprintf(" ⏳ deliberating... (%s)", elapsed)
+		// Keep ticking every second while deliberation is active.
+		return m, tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+			return deliberationTickMsg{}
+		})
+
+	case deliberationResultMsg:
+		m.deliberation.status = deliberationIdle
+		m.deliberation.cancel = nil
+		m.editor.deliberationMsg = ""
+		if msg.err != nil {
+			m.editor.copyStatus = copyError
+			m.editor.copyMsg = fmt.Sprintf("oracul: %v", msg.err)
+		} else {
+			m.editor.copyStatus = copyCopied
+			m.editor.copyMsg = fmt.Sprintf("launched: %s", msg.statusMsg)
+		}
+		m.refreshFeedback()
+		m.refreshAccountStatus()
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -360,6 +413,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global keys.
 		if key.Matches(msg, keys.Quit) {
+			// Cancel in-progress deliberation on quit.
+			if m.deliberation.cancel != nil {
+				m.deliberation.cancel()
+			}
 			return m, tea.Quit
 		}
 		if key.Matches(msg, keys.Help) {
@@ -673,18 +730,20 @@ func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		t := m.launch.selected()
+		var cmd tea.Cmd
 		if t != nil {
-			m.executeLaunch(t)
+			cmd = m.executeLaunch(t)
 		}
 		m.launch.dismiss()
-		return m, nil
+		return m, cmd
 	case "1", "2", "3", "4", "5", "6":
 		t := m.launch.selectByKey(msg.String())
+		var cmd tea.Cmd
 		if t != nil {
-			m.executeLaunch(t)
+			cmd = m.executeLaunch(t)
 		}
 		m.launch.dismiss()
-		return m, nil
+		return m, cmd
 	}
 	return m, nil
 }
@@ -706,18 +765,18 @@ func (m *AppModel) updateScopeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *AppModel) executeLaunch(t *launchTarget) {
+func (m *AppModel) executeLaunch(t *launchTarget) tea.Cmd {
 	if !t.available {
 		m.editor.copyStatus = copyError
 		m.editor.copyMsg = fmt.Sprintf("%s: not available", t.name)
-		return
+		return nil
 	}
 
 	payload := m.editor.buildCopyPayload()
 	if payload == "" {
 		m.editor.copyStatus = copyError
 		m.editor.copyMsg = "nothing to launch"
-		return
+		return nil
 	}
 
 	// Run pastewatch scan before launching.
@@ -725,14 +784,22 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 	if !m.lastScan.Clean {
 		m.editor.copyStatus = copyError
 		m.editor.copyMsg = "blocked: secrets detected (see risk panel)"
-		return
+		return nil
+	}
+
+	// Record the launch in the flight log (before async path).
+	m.recordLaunch(t.name, payload)
+
+	// Oracul Council: async non-blocking submit.
+	if t.name == "Oracul Council" {
+		return m.startDeliberation(payload)
 	}
 
 	statusMsg, err := t.action(payload)
 	if err != nil {
 		m.editor.copyStatus = copyError
 		m.editor.copyMsg = fmt.Sprintf("launch failed: %v", err)
-		return
+		return nil
 	}
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
@@ -740,8 +807,76 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 	// Refresh contextspectre feedback and Oracul account status after launch.
 	m.refreshFeedback()
 	m.refreshAccountStatus()
+	return nil
+}
 
-	// Record the launch in the flight log.
+// startDeliberation begins an async Oracul submit and returns the tick command.
+func (m *AppModel) startDeliberation(payload string) tea.Cmd {
+	// If deliberation already in progress, reject.
+	if m.deliberation.status == deliberationActive {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "deliberation already in progress"
+		return nil
+	}
+
+	m.deliberation.status = deliberationActive
+	m.deliberation.startTime = time.Now()
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = "deliberating... (0s)"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.deliberation.cancel = cancel
+
+	// Capture state for the goroutine.
+	sentences := m.editor.sentences
+	text := payload
+
+	submitCmd := func() tea.Msg {
+		cfg, err := config.Load()
+		if err != nil {
+			return deliberationResultMsg{err: fmt.Errorf("load config: %w", err)}
+		}
+		if cfg.Oracul.APIKey == "" {
+			return deliberationResultMsg{err: fmt.Errorf("no API key configured")}
+		}
+
+		filing := oracul.MapSentences(sentences)
+		question := oracul.ExtractQuestion(sentences, text)
+		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+
+		// Preflight gate.
+		gate, err := client.PreflightGate(ctx, question, filing)
+		if err != nil {
+			return deliberationResultMsg{err: fmt.Errorf("preflight: %w", err)}
+		}
+		if !gate.Allowed {
+			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason)}
+		}
+
+		// Submit for deliberation.
+		raw, err := client.Consult(ctx, &oracul.ConsultRequest{
+			Question: question,
+			Filing:   filing,
+		})
+		if err != nil {
+			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err)}
+		}
+
+		// Auto-stash the verdict.
+		stashVerdict(raw, question)
+
+		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate)}
+	}
+
+	tickCmd := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return deliberationTickMsg{}
+	})
+
+	return tea.Batch(submitCmd, tickCmd)
+}
+
+// recordLaunch appends a flight record for the launch.
+func (m *AppModel) recordLaunch(target, payload string) {
 	if m.recorder != nil {
 		ns := negativespace.Analyze(payload)
 		var gapClasses []string
@@ -749,7 +884,7 @@ func (m *AppModel) executeLaunch(t *launchTarget) {
 			gapClasses = append(gapClasses, string(g.Class))
 		}
 		_ = m.recorder.Append(flight.Record{
-			Target: t.name,
+			Target: target,
 			Text:   payload,
 			Metrics: flight.MetricsSnapshot{
 				Tokens:    m.editor.metrics.TokenWeight.Estimated,
