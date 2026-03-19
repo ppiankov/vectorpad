@@ -1,4 +1,4 @@
-package oracul
+package vectorcourt
 
 import (
 	"bytes"
@@ -17,17 +17,17 @@ const (
 	preflightTimeout = 10 * time.Second
 	accountTimeout   = 5 * time.Second
 	precedentTimeout = 10 * time.Second
-	authHeader       = "X-Oracul-Key"
+	authHeader       = "X-VC-Key"
 )
 
-// Client is an HTTP client for the Oracul API.
+// Client is an HTTP client for the VectorCourt API.
 type Client struct {
 	endpoint string
 	apiKey   string
 	http     *http.Client
 }
 
-// NewClient creates an Oracul API client.
+// NewClient creates a VectorCourt API client.
 func NewClient(endpoint, apiKey string) *Client {
 	return &Client{
 		endpoint: endpoint,
@@ -36,7 +36,7 @@ func NewClient(endpoint, apiKey string) *Client {
 	}
 }
 
-// Consult sends a case to Oracul for deliberation.
+// Consult sends a case to VectorCourt for deliberation.
 // Returns the raw JSON response envelope (VP passes through without parsing).
 func (c *Client) Consult(ctx context.Context, req *ConsultRequest) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, consultTimeout)
@@ -257,14 +257,14 @@ func (c *Client) ReportOutcome(ctx context.Context, caseID string, req *OutcomeR
 	return &result, nil
 }
 
-// APIError represents a non-2xx response from the Oracul API.
+// APIError represents a non-2xx response from the VectorCourt API.
 type APIError struct {
 	StatusCode int
 	Message    string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("oracul API %d: %s", e.StatusCode, e.Message)
+	return fmt.Sprintf("vectorcourt API %d: %s", e.StatusCode, e.Message)
 }
 
 func parseAPIError(statusCode int, body []byte) *APIError {

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/ppiankov/vectorpad/internal/config"
-	"github.com/ppiankov/vectorpad/internal/oracul"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/stash"
 )
 
@@ -87,25 +87,25 @@ func newLaunchOverlay() launchOverlay {
 		},
 	}
 
-	// Target 6: Oracul Council — only available when API key is configured.
+	// Target 6: VectorCourt — only available when API key is configured.
 	// Action is nil: async deliberation is handled by startDeliberation in app.go.
 	targets = append(targets, launchTarget{
 		key:       "6",
-		name:      "Oracul Council",
-		available: oraculKeyConfigured(),
+		name:      "VectorCourt",
+		available: vcKeyConfigured(),
 		action:    nil,
 	})
 
 	return launchOverlay{targets: targets}
 }
 
-// oraculKeyConfigured returns true if an Oracul API key is set in config.
-func oraculKeyConfigured() bool {
+// vcKeyConfigured returns true if a VectorCourt API key is set in config.
+func vcKeyConfigured() bool {
 	cfg, err := config.Load()
 	if err != nil {
 		return false
 	}
-	return cfg.Oracul.APIKey != ""
+	return cfg.VectorCourt.APIKey != ""
 }
 
 // stashVerdict saves the verdict JSON to the stash with a verdict: prefix.
@@ -134,13 +134,13 @@ func stashVerdict(raw json.RawMessage, question string) {
 }
 
 // formatVerdictSummary extracts a brief status line from the verdict JSON.
-func formatVerdictSummary(raw json.RawMessage, gate *oracul.GateResult) string {
+func formatVerdictSummary(raw json.RawMessage, gate *vectorcourt.GateResult) string {
 	var envelope struct {
 		Verdict string `json:"verdict"`
 		Status  string `json:"status"`
 	}
 	if json.Unmarshal(raw, &envelope) == nil {
-		parts := []string{"oracul"}
+		parts := []string{"vectorcourt"}
 		if envelope.Status != "" {
 			parts = append(parts, envelope.Status)
 		}
@@ -156,7 +156,7 @@ func formatVerdictSummary(raw json.RawMessage, gate *oracul.GateResult) string {
 		}
 		return strings.Join(parts, " — ")
 	}
-	return fmt.Sprintf("oracul — verdict received (%d bytes)", len(raw))
+	return fmt.Sprintf("vectorcourt — verdict received (%d bytes)", len(raw))
 }
 
 func (o *launchOverlay) show() {

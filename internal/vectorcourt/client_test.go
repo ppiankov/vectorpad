@@ -1,4 +1,4 @@
-package oracul
+package vectorcourt
 
 import (
 	"context"
@@ -14,8 +14,8 @@ func TestConsultSuccess(t *testing.T) {
 		if r.URL.Path != "/v1/consult" {
 			t.Errorf("path = %q", r.URL.Path)
 		}
-		if r.Header.Get("X-Oracul-Key") != "test_key" {
-			t.Errorf("auth header = %q", r.Header.Get("X-Oracul-Key"))
+		if r.Header.Get("X-VC-Key") != "test_key" {
+			t.Errorf("auth header = %q", r.Header.Get("X-VC-Key"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(envelope)
@@ -94,8 +94,8 @@ func TestAccountSuccess(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q", r.Method)
 		}
-		if r.Header.Get("X-Oracul-Key") != "test_key" {
-			t.Errorf("auth header = %q", r.Header.Get("X-Oracul-Key"))
+		if r.Header.Get("X-VC-Key") != "test_key" {
+			t.Errorf("auth header = %q", r.Header.Get("X-VC-Key"))
 		}
 		_ = json.NewEncoder(w).Encode(AccountStatus{
 			Tier:             "standard",

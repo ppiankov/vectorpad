@@ -1,4 +1,4 @@
-package oracul
+package vectorcourt
 
 import (
 	"testing"

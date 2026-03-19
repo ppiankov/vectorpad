@@ -1,4 +1,4 @@
-package oracul
+package vectorcourt
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/classifier"
 )
 
-// MapSentences converts classified sentences into an Oracul CaseFiling.
+// MapSentences converts classified sentences into a VectorCourt CaseFiling.
 // Tag mapping:
 //
 //	DECISION    -> decision (first match; extras go to context)

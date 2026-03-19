@@ -16,22 +16,29 @@ const (
 
 // Config holds persistent VectorPad settings.
 type Config struct {
-	Oracul OraculConfig `json:"oracul"`
+	VectorCourt VectorCourtConfig `json:"vectorcourt"`
 }
 
-// OraculConfig holds Oracul API integration settings.
-type OraculConfig struct {
+// VectorCourtConfig holds VectorCourt API integration settings.
+type VectorCourtConfig struct {
 	APIKey   string `json:"api_key"`
 	Endpoint string `json:"endpoint"`
 }
 
-// DefaultEndpoint returns the default Oracul API endpoint.
+// legacyOraculConfig is used only for reading old config files.
+type legacyOraculConfig struct {
+	APIKey   string `json:"api_key"`
+	Endpoint string `json:"endpoint"`
+}
+
+// DefaultEndpoint returns the default VectorCourt API endpoint.
 func DefaultEndpoint() string {
-	return "https://oracul.app"
+	return "https://vectorcourt.com"
 }
 
 // Load reads config from ~/.vectorpad/config.json.
 // Returns a zero Config if the file does not exist.
+// Migrates legacy "oracul" config keys to "vectorcourt" on read.
 func Load() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -50,6 +57,23 @@ func Load() (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+
+	// Migrate legacy "oracul" key if "vectorcourt" is empty.
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(data, &raw) == nil {
+		if oraculRaw, ok := raw["oracul"]; ok {
+			var legacy legacyOraculConfig
+			if json.Unmarshal(oraculRaw, &legacy) == nil {
+				if cfg.VectorCourt.APIKey == "" && legacy.APIKey != "" {
+					cfg.VectorCourt.APIKey = legacy.APIKey
+				}
+				if cfg.VectorCourt.Endpoint == "" && legacy.Endpoint != "" {
+					cfg.VectorCourt.Endpoint = legacy.Endpoint
+				}
+			}
+		}
+	}
+
 	return &cfg, nil
 }
 
@@ -72,7 +96,7 @@ func Save(cfg *Config) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// Set updates a config value by dot-path key (e.g., "oracul.api_key").
+// Set updates a config value by dot-path key (e.g., "vectorcourt.api_key").
 func Set(key, value string) error {
 	cfg, err := Load()
 	if err != nil {
@@ -80,10 +104,10 @@ func Set(key, value string) error {
 	}
 
 	switch key {
-	case "oracul.api_key":
-		cfg.Oracul.APIKey = value
-	case "oracul.endpoint":
-		cfg.Oracul.Endpoint = value
+	case "vectorcourt.api_key":
+		cfg.VectorCourt.APIKey = value
+	case "vectorcourt.endpoint":
+		cfg.VectorCourt.Endpoint = value
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -99,10 +123,10 @@ func Get(key string) (string, error) {
 	}
 
 	switch key {
-	case "oracul.api_key":
-		return cfg.Oracul.APIKey, nil
-	case "oracul.endpoint":
-		ep := cfg.Oracul.Endpoint
+	case "vectorcourt.api_key":
+		return cfg.VectorCourt.APIKey, nil
+	case "vectorcourt.endpoint":
+		ep := cfg.VectorCourt.Endpoint
 		if ep == "" {
 			ep = DefaultEndpoint()
 		}
@@ -112,10 +136,10 @@ func Get(key string) (string, error) {
 	}
 }
 
-// Endpoint returns the configured Oracul endpoint or the default.
+// Endpoint returns the configured VectorCourt endpoint or the default.
 func (c *Config) Endpoint() string {
-	if c.Oracul.Endpoint != "" {
-		return c.Oracul.Endpoint
+	if c.VectorCourt.Endpoint != "" {
+		return c.VectorCourt.Endpoint
 	}
 	return DefaultEndpoint()
 }

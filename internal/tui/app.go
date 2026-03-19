@@ -14,9 +14,9 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
-	"github.com/ppiankov/vectorpad/internal/oracul"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
 
 // Panel focus targets.
@@ -61,7 +61,7 @@ type preflightTickMsg struct{ seq int }
 
 // preflightResultMsg carries the async preflight result back to Update.
 type preflightResultMsg struct {
-	gate     *oracul.GateResult
+	gate     *vectorcourt.GateResult
 	err      error
 	textHash string
 }
@@ -83,7 +83,7 @@ type precedentState struct {
 	seq      int
 }
 
-// deliberationStatus represents the state of an async Oracul submit.
+// deliberationStatus represents the state of an async VectorCourt submit.
 type deliberationStatus int
 
 const (
@@ -91,22 +91,22 @@ const (
 	deliberationActive                    // API call in flight
 )
 
-// deliberationState tracks an in-progress Oracul deliberation.
+// deliberationState tracks an in-progress VectorCourt deliberation.
 type deliberationState struct {
 	status    deliberationStatus
 	startTime time.Time
 	cancel    context.CancelFunc
-	flightID  string // ID of the flight record to update with Oracul data
+	flightID  string // ID of the flight record to update with VectorCourt data
 }
 
 // deliberationTickMsg fires every second to update the elapsed timer.
 type deliberationTickMsg struct{}
 
-// deliberationResultMsg carries the async Oracul verdict back to Update.
+// deliberationResultMsg carries the async VectorCourt verdict back to Update.
 type deliberationResultMsg struct {
 	statusMsg string
 	err       error
-	oracul    *flight.OraculSnapshot
+	vcSnapshot *flight.VectorCourtSnapshot
 }
 
 // precedentTickMsg fires after the precedent debounce period.
@@ -114,7 +114,7 @@ type precedentTickMsg struct{ seq int }
 
 // precedentResultMsg carries the async precedent search result back to Update.
 type precedentResultMsg struct {
-	search   *oracul.PrecedentSearch
+	search   *vectorcourt.PrecedentSearch
 	err      error
 	textHash string
 }
@@ -161,7 +161,7 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	// Load contextspectre feedback on startup (nil if unavailable).
 	m.risk.feedback = detect.ReadFeedback(caps)
 	m.risk.decisionEcon = detect.ReadDecisionEconomics(caps)
-	// Load Oracul account status on startup (nil if no key or fetch fails).
+	// Load VectorCourt account status on startup (nil if no key or fetch fails).
 	m.refreshAccountStatus()
 	return m
 }
@@ -183,15 +183,15 @@ func (m *AppModel) refreshFeedback() {
 	m.risk.decisionEcon = detect.ReadDecisionEconomics(m.caps)
 }
 
-// refreshAccountStatus loads Oracul account status into the risk panel.
+// refreshAccountStatus loads VectorCourt account status into the risk panel.
 // Returns nil (hidden section) if no API key is configured or fetch fails.
 func (m *AppModel) refreshAccountStatus() {
 	cfg, err := config.Load()
-	if err != nil || cfg.Oracul.APIKey == "" {
+	if err != nil || cfg.VectorCourt.APIKey == "" {
 		m.risk.accountStatus = nil
 		return
 	}
-	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	status, err := client.Account(ctx)
@@ -202,7 +202,7 @@ func (m *AppModel) refreshAccountStatus() {
 	m.risk.accountStatus = status
 }
 
-// maybeSchedulePreflight resets the debounce timer if text changed and Oracul key is configured.
+// maybeSchedulePreflight resets the debounce timer if text changed and VectorCourt key is configured.
 // Wraps the editor cmd so both fire.
 func (m *AppModel) maybeSchedulePreflight(editorCmd tea.Cmd) tea.Cmd {
 	text := m.editor.value()
@@ -225,10 +225,10 @@ func (m *AppModel) maybeSchedulePreflight(editorCmd tea.Cmd) tea.Cmd {
 	return tickCmd
 }
 
-// startPreflightCheck fires an async preflight API call if Oracul key is configured.
+// startPreflightCheck fires an async preflight API call if VectorCourt key is configured.
 func (m *AppModel) startPreflightCheck() tea.Cmd {
 	cfg, err := config.Load()
-	if err != nil || cfg.Oracul.APIKey == "" {
+	if err != nil || cfg.VectorCourt.APIKey == "" {
 		m.preflight.status = preflightIdle
 		return nil
 	}
@@ -237,9 +237,9 @@ func (m *AppModel) startPreflightCheck() tea.Cmd {
 	hash := m.preflight.textHash
 	sentences := m.editor.sentences
 	return func() tea.Msg {
-		filing := oracul.MapSentences(sentences)
-		question := oracul.ExtractQuestion(sentences, text)
-		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+		filing := vectorcourt.MapSentences(sentences)
+		question := vectorcourt.ExtractQuestion(sentences, text)
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 		gate, err := client.PreflightGate(context.Background(), question, filing)
 		return preflightResultMsg{gate: gate, err: err, textHash: hash}
 	}
@@ -274,10 +274,10 @@ func (m *AppModel) maybeSchedulePrecedent(editorCmd tea.Cmd) tea.Cmd {
 	return tickCmd
 }
 
-// startPrecedentSearch fires an async precedent search if Oracul key is configured.
+// startPrecedentSearch fires an async precedent search if VectorCourt key is configured.
 func (m *AppModel) startPrecedentSearch() tea.Cmd {
 	cfg, err := config.Load()
-	if err != nil || cfg.Oracul.APIKey == "" {
+	if err != nil || cfg.VectorCourt.APIKey == "" {
 		m.precedent.status = precedentIdle
 		return nil
 	}
@@ -286,8 +286,8 @@ func (m *AppModel) startPrecedentSearch() tea.Cmd {
 	hash := m.precedent.textHash
 	sentences := m.editor.sentences
 	return func() tea.Msg {
-		question := oracul.ExtractQuestion(sentences, text)
-		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+		question := vectorcourt.ExtractQuestion(sentences, text)
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 		search, err := client.SearchPrecedents(context.Background(), question, 3)
 		return precedentResultMsg{search: search, err: err, textHash: hash}
 	}
@@ -374,9 +374,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case deliberationResultMsg:
-		// Attach Oracul snapshot to flight record (best-effort).
-		if m.recorder != nil && m.deliberation.flightID != "" && msg.oracul != nil {
-			_ = m.recorder.UpdateOracul(m.deliberation.flightID, msg.oracul)
+		// Attach VectorCourt snapshot to flight record (best-effort).
+		if m.recorder != nil && m.deliberation.flightID != "" && msg.vcSnapshot != nil {
+			_ = m.recorder.UpdateVectorCourt(m.deliberation.flightID, msg.vcSnapshot)
 		}
 		m.deliberation.status = deliberationIdle
 		m.deliberation.cancel = nil
@@ -384,7 +384,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.deliberationMsg = ""
 		if msg.err != nil {
 			m.editor.copyStatus = copyError
-			m.editor.copyMsg = fmt.Sprintf("oracul: %v", msg.err)
+			m.editor.copyMsg = fmt.Sprintf("vectorcourt: %v", msg.err)
 		} else {
 			m.editor.copyStatus = copyCopied
 			m.editor.copyMsg = fmt.Sprintf("launched: %s", msg.statusMsg)
@@ -797,8 +797,8 @@ func (m *AppModel) executeLaunch(t *launchTarget) tea.Cmd {
 	// Record the launch in the flight log (before async path).
 	flightID := m.recordLaunch(t.name, payload)
 
-	// Oracul Council: async non-blocking submit.
-	if t.name == "Oracul Council" {
+	// VectorCourt: async non-blocking submit.
+	if t.name == "VectorCourt" {
 		m.deliberation.flightID = flightID
 		return m.startDeliberation(payload)
 	}
@@ -812,13 +812,13 @@ func (m *AppModel) executeLaunch(t *launchTarget) tea.Cmd {
 	m.editor.copyStatus = copyCopied
 	m.editor.copyMsg = fmt.Sprintf("launched: %s", statusMsg)
 
-	// Refresh contextspectre feedback and Oracul account status after launch.
+	// Refresh contextspectre feedback and VectorCourt account status after launch.
 	m.refreshFeedback()
 	m.refreshAccountStatus()
 	return nil
 }
 
-// startDeliberation begins an async Oracul submit and returns the tick command.
+// startDeliberation begins an async VectorCourt submit and returns the tick command.
 func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 	// If deliberation already in progress, reject.
 	if m.deliberation.status == deliberationActive {
@@ -848,13 +848,13 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 		if err != nil {
 			return deliberationResultMsg{err: fmt.Errorf("load config: %w", err)}
 		}
-		if cfg.Oracul.APIKey == "" {
+		if cfg.VectorCourt.APIKey == "" {
 			return deliberationResultMsg{err: fmt.Errorf("no API key configured")}
 		}
 
-		filing := oracul.MapSentences(sentences)
-		question := oracul.ExtractQuestion(sentences, text)
-		client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+		filing := vectorcourt.MapSentences(sentences)
+		question := vectorcourt.ExtractQuestion(sentences, text)
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 
 		// Preflight gate.
 		gate, err := client.PreflightGate(ctx, question, filing)
@@ -862,15 +862,15 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 			return deliberationResultMsg{err: fmt.Errorf("preflight: %w", err)}
 		}
 		if !gate.Allowed {
-			snap := &flight.OraculSnapshot{Preflight: "REJECTED"}
+			snap := &flight.VectorCourtSnapshot{Preflight: "REJECTED"}
 			if gate.Tier != "" {
 				snap.Tier = gate.Tier
 			}
-			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason), oracul: snap}
+			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason), vcSnapshot: snap}
 		}
 
-		// Build Oracul snapshot from preflight gate.
-		snap := &flight.OraculSnapshot{
+		// Build VectorCourt snapshot from preflight gate.
+		snap := &flight.VectorCourtSnapshot{
 			Tier:           gate.Tier,
 			Preflight:      "ACCEPTED",
 			Warnings:       gate.Warnings,
@@ -881,18 +881,18 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 		}
 
 		// Submit for deliberation.
-		raw, err := client.Consult(ctx, &oracul.ConsultRequest{
+		raw, err := client.Consult(ctx, &vectorcourt.ConsultRequest{
 			Question: question,
 			Filing:   filing,
 		})
 		if err != nil {
-			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err), oracul: snap}
+			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err), vcSnapshot: snap}
 		}
 
 		// Auto-stash the verdict.
 		stashVerdict(raw, question)
 
-		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate), oracul: snap}
+		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate), vcSnapshot: snap}
 	}
 
 	tickCmd := tea.Tick(time.Second, func(_ time.Time) tea.Msg {

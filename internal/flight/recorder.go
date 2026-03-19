@@ -14,20 +14,20 @@ import (
 
 // Record captures a launched vector with its full analysis snapshot.
 type Record struct {
-	ID         string          `json:"id"`
-	Launched   time.Time       `json:"launched"`
-	Target     string          `json:"target"`
-	Text       string          `json:"text"`
-	Metrics    MetricsSnapshot `json:"metrics"`
-	Gaps       []string        `json:"gaps,omitempty"`
-	VagueVerbs []string        `json:"vague_verbs,omitempty"`
-	Outcome    string          `json:"outcome,omitempty"` // good, bad, partial, or empty
-	Note       string          `json:"note,omitempty"`
-	Oracul     *OraculSnapshot `json:"oracul,omitempty"`
+	ID          string               `json:"id"`
+	Launched    time.Time            `json:"launched"`
+	Target      string               `json:"target"`
+	Text        string               `json:"text"`
+	Metrics     MetricsSnapshot      `json:"metrics"`
+	Gaps        []string             `json:"gaps,omitempty"`
+	VagueVerbs  []string             `json:"vague_verbs,omitempty"`
+	Outcome     string               `json:"outcome,omitempty"` // good, bad, partial, or empty
+	Note        string               `json:"note,omitempty"`
+	VectorCourt *VectorCourtSnapshot `json:"vectorcourt,omitempty"`
 }
 
-// OraculSnapshot captures Oracul-specific metadata for a flight record.
-type OraculSnapshot struct {
+// VectorCourtSnapshot captures VectorCourt-specific metadata for a flight record.
+type VectorCourtSnapshot struct {
 	Tier           string   `json:"tier,omitempty"`
 	FilingQuality  float64  `json:"filing_quality,omitempty"`
 	Preflight      string   `json:"preflight,omitempty"` // ACCEPTED or REJECTED
@@ -51,11 +51,11 @@ type Stats struct {
 	OutcomeCounts   map[string]int     `json:"outcome_counts"`
 	AvgCDRByOutcome map[string]float64 `json:"avg_cdr_by_outcome"`
 	TopGaps         []GapFrequency     `json:"top_gaps,omitempty"`
-	Oracul          *OraculStats       `json:"oracul,omitempty"`
+	VectorCourt     *VectorCourtStats  `json:"vectorcourt,omitempty"`
 }
 
-// OraculStats holds aggregate Oracul-specific analysis.
-type OraculStats struct {
+// VectorCourtStats holds aggregate VectorCourt-specific analysis.
+type VectorCourtStats struct {
 	TotalSubmits     int            `json:"total_submits"`
 	AvgFilingQuality float64        `json:"avg_filing_quality"`
 	RejectionRate    float64        `json:"rejection_rate"`
@@ -110,15 +110,15 @@ func (r *Recorder) Append(rec Record) error {
 	return err
 }
 
-// UpdateOracul attaches Oracul metadata to an existing flight record.
-func (r *Recorder) UpdateOracul(id string, snap *OraculSnapshot) error {
+// UpdateVectorCourt attaches VectorCourt metadata to an existing flight record.
+func (r *Recorder) UpdateVectorCourt(id string, snap *VectorCourtSnapshot) error {
 	records, err := r.loadAll()
 	if err != nil {
 		return err
 	}
 	for i := range records {
 		if records[i].ID == id {
-			records[i].Oracul = snap
+			records[i].VectorCourt = snap
 			return r.writeAll(records)
 		}
 	}
@@ -213,44 +213,44 @@ func (r *Recorder) ComputeStats() (Stats, error) {
 		stats.TopGaps = stats.TopGaps[:5]
 	}
 
-	// Oracul stats.
-	var oraculSubmits int
+	// VectorCourt stats.
+	var vcSubmits int
 	var qualitySum float64
 	var qualityCount int
 	var rejections int
 	warnCounts := make(map[string]int)
 	for _, rec := range records {
-		if rec.Oracul == nil {
+		if rec.VectorCourt == nil {
 			continue
 		}
-		oraculSubmits++
-		if rec.Oracul.FilingQuality > 0 {
-			qualitySum += rec.Oracul.FilingQuality
+		vcSubmits++
+		if rec.VectorCourt.FilingQuality > 0 {
+			qualitySum += rec.VectorCourt.FilingQuality
 			qualityCount++
 		}
-		if rec.Oracul.Preflight == "REJECTED" {
+		if rec.VectorCourt.Preflight == "REJECTED" {
 			rejections++
 		}
-		for _, w := range rec.Oracul.Warnings {
+		for _, w := range rec.VectorCourt.Warnings {
 			warnCounts[w]++
 		}
 	}
-	if oraculSubmits > 0 {
-		os := &OraculStats{TotalSubmits: oraculSubmits}
+	if vcSubmits > 0 {
+		vs := &VectorCourtStats{TotalSubmits: vcSubmits}
 		if qualityCount > 0 {
-			os.AvgFilingQuality = qualitySum / float64(qualityCount)
+			vs.AvgFilingQuality = qualitySum / float64(qualityCount)
 		}
-		os.RejectionRate = float64(rejections) / float64(oraculSubmits)
+		vs.RejectionRate = float64(rejections) / float64(vcSubmits)
 		for w, count := range warnCounts {
-			os.TopWarnings = append(os.TopWarnings, GapFrequency{Class: w, Count: count})
+			vs.TopWarnings = append(vs.TopWarnings, GapFrequency{Class: w, Count: count})
 		}
-		sort.Slice(os.TopWarnings, func(i, j int) bool {
-			return os.TopWarnings[i].Count > os.TopWarnings[j].Count
+		sort.Slice(vs.TopWarnings, func(i, j int) bool {
+			return vs.TopWarnings[i].Count > vs.TopWarnings[j].Count
 		})
-		if len(os.TopWarnings) > 5 {
-			os.TopWarnings = os.TopWarnings[:5]
+		if len(vs.TopWarnings) > 5 {
+			vs.TopWarnings = vs.TopWarnings[:5]
 		}
-		stats.Oracul = os
+		stats.VectorCourt = vs
 	}
 
 	return stats, nil

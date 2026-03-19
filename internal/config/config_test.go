@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,8 +12,8 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	t.Setenv("VECTORPAD_HOME", tmp)
 
 	cfg := &Config{
-		Oracul: OraculConfig{
-			APIKey:   "oracul_test_key",
+		VectorCourt: VectorCourtConfig{
+			APIKey:   "vc_test_key",
 			Endpoint: "https://custom.example.com",
 		},
 	}
@@ -26,11 +27,11 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if loaded.Oracul.APIKey != cfg.Oracul.APIKey {
-		t.Errorf("APIKey = %q, want %q", loaded.Oracul.APIKey, cfg.Oracul.APIKey)
+	if loaded.VectorCourt.APIKey != cfg.VectorCourt.APIKey {
+		t.Errorf("APIKey = %q, want %q", loaded.VectorCourt.APIKey, cfg.VectorCourt.APIKey)
 	}
-	if loaded.Oracul.Endpoint != cfg.Oracul.Endpoint {
-		t.Errorf("Endpoint = %q, want %q", loaded.Oracul.Endpoint, cfg.Oracul.Endpoint)
+	if loaded.VectorCourt.Endpoint != cfg.VectorCourt.Endpoint {
+		t.Errorf("Endpoint = %q, want %q", loaded.VectorCourt.Endpoint, cfg.VectorCourt.Endpoint)
 	}
 }
 
@@ -43,8 +44,8 @@ func TestLoadMissingFile(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.Oracul.APIKey != "" {
-		t.Errorf("expected empty APIKey, got %q", cfg.Oracul.APIKey)
+	if cfg.VectorCourt.APIKey != "" {
+		t.Errorf("expected empty APIKey, got %q", cfg.VectorCourt.APIKey)
 	}
 }
 
@@ -52,14 +53,14 @@ func TestSetGet(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("VECTORPAD_HOME", tmp)
 
-	if err := Set("oracul.api_key", "my_key"); err != nil {
+	if err := Set("vectorcourt.api_key", "my_key"); err != nil {
 		t.Fatalf("Set api_key: %v", err)
 	}
-	if err := Set("oracul.endpoint", "https://local.test"); err != nil {
+	if err := Set("vectorcourt.endpoint", "https://local.test"); err != nil {
 		t.Fatalf("Set endpoint: %v", err)
 	}
 
-	key, err := Get("oracul.api_key")
+	key, err := Get("vectorcourt.api_key")
 	if err != nil {
 		t.Fatalf("Get api_key: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestSetGet(t *testing.T) {
 		t.Errorf("api_key = %q, want %q", key, "my_key")
 	}
 
-	ep, err := Get("oracul.endpoint")
+	ep, err := Get("vectorcourt.endpoint")
 	if err != nil {
 		t.Fatalf("Get endpoint: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestGetDefaultEndpoint(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("VECTORPAD_HOME", tmp)
 
-	ep, err := Get("oracul.endpoint")
+	ep, err := Get("vectorcourt.endpoint")
 	if err != nil {
 		t.Fatalf("Get endpoint: %v", err)
 	}
@@ -134,8 +135,37 @@ func TestEndpointMethod(t *testing.T) {
 		t.Errorf("empty config endpoint = %q, want %q", cfg.Endpoint(), DefaultEndpoint())
 	}
 
-	cfg.Oracul.Endpoint = "https://custom.test"
+	cfg.VectorCourt.Endpoint = "https://custom.test"
 	if cfg.Endpoint() != "https://custom.test" {
 		t.Errorf("custom endpoint = %q, want %q", cfg.Endpoint(), "https://custom.test")
+	}
+}
+
+func TestLegacyOraculMigration(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("VECTORPAD_HOME", tmp)
+
+	// Write a legacy config with "oracul" key.
+	legacyCfg := map[string]interface{}{
+		"oracul": map[string]string{
+			"api_key":  "oracul_pro_legacy123",
+			"endpoint": "https://oracul.app",
+		},
+	}
+	data, _ := json.MarshalIndent(legacyCfg, "", "  ")
+	if err := os.WriteFile(filepath.Join(tmp, configFileName), data, 0600); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.VectorCourt.APIKey != "oracul_pro_legacy123" {
+		t.Errorf("migrated APIKey = %q, want legacy key", cfg.VectorCourt.APIKey)
+	}
+	if cfg.VectorCourt.Endpoint != "https://oracul.app" {
+		t.Errorf("migrated Endpoint = %q, want legacy endpoint", cfg.VectorCourt.Endpoint)
 	}
 }

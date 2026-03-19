@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.0] - 2026-03-19
+
+### Changed
+- Rebrand Oracul to VectorCourt: package `internal/oracul` renamed to `internal/vectorcourt`
+- Auth header: `X-Oracul-Key` replaced by `X-VC-Key`
+- Default endpoint: `https://oracul.app` replaced by `https://vectorcourt.com`
+- Config keys: `oracul.api_key` / `oracul.endpoint` replaced by `vectorcourt.api_key` / `vectorcourt.endpoint`
+- CLI flags: `--to oracul` / `--format oracul` replaced by `--to vectorcourt` / `--format vectorcourt`
+- TUI: launch target "Oracul Council" renamed to "VectorCourt"
+- Backward-compatible config migration: existing `oracul` config keys auto-migrate on load
+
 ## [0.20.0] - 2026-03-10
 
 ### Added

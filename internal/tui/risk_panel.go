@@ -11,7 +11,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
-	"github.com/ppiankov/vectorpad/internal/oracul"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/scopedecl"
 )
@@ -27,9 +27,9 @@ type riskPanel struct {
 	decomposeResult    decompose.Result
 	feedback           *detect.Feedback
 	decisionEcon       *detect.DecisionEcon
-	accountStatus      *oracul.AccountStatus
-	preflightReadiness *oracul.GateResult
-	precedentSearch    *oracul.PrecedentSearch
+	accountStatus      *vectorcourt.AccountStatus
+	preflightReadiness *vectorcourt.GateResult
+	precedentSearch    *vectorcourt.PrecedentSearch
 	width              int
 	height             int
 }
@@ -246,10 +246,10 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 	}
 
-	// Oracul account status — only when configured and fetched.
+	// VectorCourt account status — only when configured and fetched.
 	if p.accountStatus != nil {
 		b.WriteString("\n")
-		b.WriteString(stylePanelTitle.Render("ORACUL"))
+		b.WriteString(stylePanelTitle.Render("VECTORCOURT"))
 		b.WriteString("\n")
 		b.WriteString(styleMuted.Render(fmt.Sprintf("  tier: %s", p.accountStatus.Tier)))
 		b.WriteString("\n")
@@ -284,16 +284,16 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 	}
 
-	// Live preflight readiness — shown below ORACUL section when available.
+	// Live preflight readiness — shown below VECTORCOURT section when available.
 	if p.preflightReadiness != nil {
 		if !p.preflightReadiness.Allowed {
-			b.WriteString(styleError.Render(fmt.Sprintf("  oracul: BLOCKED — %s", p.preflightReadiness.Reason)))
+			b.WriteString(styleError.Render(fmt.Sprintf("  vc: BLOCKED — %s", p.preflightReadiness.Reason)))
 			b.WriteString("\n")
 		} else if len(p.preflightReadiness.Warnings) > 0 {
-			b.WriteString(styleWarning.Render(fmt.Sprintf("  oracul: WARN — %s", p.preflightReadiness.Warnings[0])))
+			b.WriteString(styleWarning.Render(fmt.Sprintf("  vc: WARN — %s", p.preflightReadiness.Warnings[0])))
 			b.WriteString("\n")
 		} else {
-			b.WriteString(styleSuccess.Render("  oracul: READY"))
+			b.WriteString(styleSuccess.Render("  vc: READY"))
 			b.WriteString("\n")
 		}
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
-	"github.com/ppiankov/vectorpad/internal/oracul"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
@@ -216,14 +216,14 @@ func runLog(args []string, stdout io.Writer, stderr io.Writer) int {
 				_, _ = fmt.Fprintf(stdout, "  %s: %d\n", g.Class, g.Count)
 			}
 		}
-		if stats.Oracul != nil {
+		if stats.VectorCourt != nil {
 			_, _ = fmt.Fprintln(stdout, "Oracul:")
-			_, _ = fmt.Fprintf(stdout, "  submits: %d\n", stats.Oracul.TotalSubmits)
-			_, _ = fmt.Fprintf(stdout, "  avg filing quality: %.0f%%\n", stats.Oracul.AvgFilingQuality*100)
-			_, _ = fmt.Fprintf(stdout, "  rejection rate: %.0f%%\n", stats.Oracul.RejectionRate*100)
-			if len(stats.Oracul.TopWarnings) > 0 {
+			_, _ = fmt.Fprintf(stdout, "  submits: %d\n", stats.VectorCourt.TotalSubmits)
+			_, _ = fmt.Fprintf(stdout, "  avg filing quality: %.0f%%\n", stats.VectorCourt.AvgFilingQuality*100)
+			_, _ = fmt.Fprintf(stdout, "  rejection rate: %.0f%%\n", stats.VectorCourt.RejectionRate*100)
+			if len(stats.VectorCourt.TopWarnings) > 0 {
 				_, _ = fmt.Fprintln(stdout, "  top warnings:")
-				for _, w := range stats.Oracul.TopWarnings {
+				for _, w := range stats.VectorCourt.TopWarnings {
 					_, _ = fmt.Fprintf(stdout, "    %s: %d\n", w.Class, w.Count)
 				}
 			}
@@ -743,8 +743,8 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		}
 	}
 
-	if target != "oracul" {
-		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to oracul [--output file.json] [--dry-run] [--no-preflight]")
+	if target != "vectorcourt" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to vectorcourt [--output file.json] [--dry-run] [--no-preflight]")
 		return 1
 	}
 
@@ -754,8 +754,8 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
-	if cfg.Oracul.APIKey == "" {
-		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+	if cfg.VectorCourt.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set vectorcourt.api_key <key>)")
 		return 1
 	}
 
@@ -773,10 +773,10 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 
 	// Classify and map.
 	sentences := classifier.Classify(text)
-	filing := oracul.MapSentences(sentences)
-	question := oracul.ExtractQuestion(sentences, text)
+	filing := vectorcourt.MapSentences(sentences)
+	question := vectorcourt.ExtractQuestion(sentences, text)
 
-	req := &oracul.ConsultRequest{
+	req := &vectorcourt.ConsultRequest{
 		Question: question,
 		Filing:   filing,
 	}
@@ -792,7 +792,7 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		return 0
 	}
 
-	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 
 	// Preflight gate.
 	if !noPreflight {
@@ -861,8 +861,8 @@ func runExport(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		}
 	}
 
-	if format != "oracul" {
-		_, _ = fmt.Fprintln(stderr, "usage: vectorpad export --format oracul")
+	if format != "vectorcourt" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad export --format vectorcourt")
 		return 1
 	}
 
@@ -878,10 +878,10 @@ func runExport(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	}
 
 	sentences := classifier.Classify(text)
-	filing := oracul.MapSentences(sentences)
-	question := oracul.ExtractQuestion(sentences, text)
+	filing := vectorcourt.MapSentences(sentences)
+	question := vectorcourt.ExtractQuestion(sentences, text)
 
-	req := &oracul.ConsultRequest{
+	req := &vectorcourt.ConsultRequest{
 		Question: question,
 		Filing:   filing,
 	}
@@ -936,16 +936,16 @@ func runPrecedent(args []string, stdin io.Reader, stdout io.Writer, stderr io.Wr
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
-	if cfg.Oracul.APIKey == "" {
-		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+	if cfg.VectorCourt.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set vectorcourt.api_key <key>)")
 		return 1
 	}
 
 	// Extract question from classified text.
 	sentences := classifier.Classify(query)
-	question := oracul.ExtractQuestion(sentences, query)
+	question := vectorcourt.ExtractQuestion(sentences, query)
 
-	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
 	result, err := client.SearchPrecedents(context.Background(), question, limit)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
@@ -1062,13 +1062,13 @@ func runOutcome(args []string, stdout io.Writer, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
 	}
-	if cfg.Oracul.APIKey == "" {
-		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set oracul.api_key <key>)")
+	if cfg.VectorCourt.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set vectorcourt.api_key <key>)")
 		return 1
 	}
 
-	client := oracul.NewClient(cfg.Endpoint(), cfg.Oracul.APIKey)
-	resp, err := client.ReportOutcome(context.Background(), envelope.CaseID, &oracul.OutcomeRequest{
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+	resp, err := client.ReportOutcome(context.Background(), envelope.CaseID, &vectorcourt.OutcomeRequest{
 		Result: result,
 		Note:   note,
 	})

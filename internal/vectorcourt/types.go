@@ -1,8 +1,8 @@
-package oracul
+package vectorcourt
 
 import "encoding/json"
 
-// CaseFiling mirrors Oracul's schema.CaseFiling for the /v1/consult API.
+// CaseFiling mirrors VectorCourt's schema.CaseFiling for the /v1/consult API.
 // Kept in sync manually — no cross-module import.
 type CaseFiling struct {
 	Decision        string   `json:"decision"`
@@ -20,13 +20,13 @@ type ConsultRequest struct {
 	Filing   *CaseFiling `json:"filing,omitempty"`
 }
 
-// ConsultResponse wraps the raw JSON envelope from Oracul.
+// ConsultResponse wraps the raw JSON envelope from VectorCourt.
 // VP passes this through without parsing verdict internals.
 type ConsultResponse struct {
 	Raw json.RawMessage
 }
 
-// PreflightResult mirrors Oracul's engine.PreflightResult.
+// PreflightResult mirrors VectorCourt's engine.PreflightResult.
 type PreflightResult struct {
 	Verdict       string   `json:"verdict"`
 	Reason        string   `json:"reason,omitempty"`
@@ -35,7 +35,7 @@ type PreflightResult struct {
 	Warnings      []string `json:"warnings,omitempty"`
 }
 
-// AccountStatus mirrors Oracul's GET /v1/account response.
+// AccountStatus mirrors VectorCourt's GET /v1/account response.
 type AccountStatus struct {
 	Tier             string `json:"tier"`
 	SubmissionsToday int    `json:"submissions_today"`

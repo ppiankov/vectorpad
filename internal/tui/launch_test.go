@@ -74,8 +74,8 @@ func TestLaunchOverlaySelectByKey(t *testing.T) {
 	}
 
 	target = o.selectByKey("6")
-	if target == nil || target.name != "Oracul Council" {
-		t.Error("expected Oracul Council for key 6")
+	if target == nil || target.name != "VectorCourt" {
+		t.Error("expected VectorCourt for key 6")
 	}
 
 	target = o.selectByKey("9")
