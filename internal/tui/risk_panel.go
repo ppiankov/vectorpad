@@ -386,7 +386,18 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 	}
 
-	return b.String()
+	// Truncate to fit panel height — keep top sections visible.
+	content := b.String()
+	maxLines := p.height - 2 // panel border
+	if maxLines > 0 {
+		lines := strings.Split(content, "\n")
+		if len(lines) > maxLines {
+			lines = lines[:maxLines-1]
+			lines = append(lines, styleDim.Render("  ..."))
+			content = strings.Join(lines, "\n")
+		}
+	}
+	return content
 }
 
 func (p riskPanel) renderPastewatchStatus(b *strings.Builder, caps detect.Capabilities, mode detect.PastewatchMode, scan detect.ScanResult) {
