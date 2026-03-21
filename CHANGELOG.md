@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - Live spar viewer: `vectorpad submit --to vectorcourt --live` streams deliberation rounds via SSE
 - SSE stream client (`internal/vectorcourt/stream.go`) for GET /v1/submissions/{id}/stream
 - ANSI spar renderer (`internal/tui/spar.go`) — plain terminal output, works over SSH
+- Editor line indicator: `L3/18` in dashboard when text overflows visible area
+- Adaptive classified view: collapses to 2 lines for long text, hidden for very long text
 
 ## [0.21.0] - 2026-03-19
 
