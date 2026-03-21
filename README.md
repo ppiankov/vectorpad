@@ -221,7 +221,8 @@ VectorPad is the authoring tool. VectorCourt is the deliberation engine. Git is 
 - [x] Phase 7 - claim registry (SQLite stash, Ollama embeddings, cosine similarity)
 - [x] Phase 8 - VectorCourt integration (submit, export, config, preflight gate)
 - [x] Phase 9 - VectorCourt TUI experience (account status, launch target, live preflight, verdict stash)
-- [ ] Phase 10 - decision memory (precedent search, async submit, outcome tracking, verdict diff)
+- [x] Phase 10 - decision memory (precedent search, async submit, outcome tracking, verdict diff)
+- [x] Phase 11 - instant precedent, prediction debt health, live spar viewer
 
 ## License
 

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.0] - 2026-03-21
+
+### Added
+- Instant precedent recognition: 300ms debounced trigram search in risk panel while typing
+- `InstantPrecedents()` client method for GET /v1/precedents
+- Prediction debt health display in risk panel: debt ratio and band (healthy/accumulating/critical)
+- `GetPredictionDebt()` client method for GET /v1/health/prediction-debt
+- Live spar viewer: `vectorpad submit --to vectorcourt --live` streams deliberation rounds via SSE
+- SSE stream client (`internal/vectorcourt/stream.go`) for GET /v1/submissions/{id}/stream
+- ANSI spar renderer (`internal/tui/spar.go`) — plain terminal output, works over SSH
+
 ## [0.21.0] - 2026-03-19
 
 ### Changed
