@@ -29,6 +29,7 @@ type riskPanel struct {
 	decisionEcon       *detect.DecisionEcon
 	accountStatus      *vectorcourt.AccountStatus
 	predictionDebt     *vectorcourt.PredictionDebt
+	instantPrecedent   *vectorcourt.InstantPrecedentResult
 	preflightReadiness *vectorcourt.GateResult
 	precedentSearch    *vectorcourt.PrecedentSearch
 	width              int
@@ -296,6 +297,25 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 		b.WriteString(debtStyle.Render(fmt.Sprintf("  learning: debt %.2f (%s)", p.predictionDebt.DebtRatio, p.predictionDebt.Band)))
 		b.WriteString("\n")
+	}
+
+	// Instant precedent — compact one-line summary from 300ms debounce.
+	if p.instantPrecedent != nil {
+		if p.instantPrecedent.MatchCount > 0 {
+			precStyle := styleMuted
+			if p.instantPrecedent.TopSimilarity >= 0.70 {
+				precStyle = styleWarning
+			}
+			b.WriteString(precStyle.Render(fmt.Sprintf("  precedents: %d found (top %.0f%%)", p.instantPrecedent.MatchCount, p.instantPrecedent.TopSimilarity*100)))
+			b.WriteString("\n")
+			if p.instantPrecedent.Note != "" {
+				b.WriteString(styleWarning.Render(fmt.Sprintf("  %s", p.instantPrecedent.Note)))
+				b.WriteString("\n")
+			}
+		} else {
+			b.WriteString(styleDim.Render("  precedents: none found"))
+			b.WriteString("\n")
+		}
 	}
 
 	// Live preflight readiness — shown below VECTORCOURT section when available.

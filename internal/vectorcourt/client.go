@@ -257,6 +257,43 @@ func (c *Client) ReportOutcome(ctx context.Context, caseID string, req *OutcomeR
 	return &result, nil
 }
 
+// InstantPrecedents performs a fast trigram-based precedent lookup.
+func (c *Client) InstantPrecedents(ctx context.Context, query string, limit int) (*InstantPrecedentResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, accountTimeout)
+	defer cancel()
+
+	u := c.endpoint + "/v1/precedents?q=" + url.QueryEscape(query) + "&limit=" + strconv.Itoa(limit)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("instant precedent request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result InstantPrecedentResult
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse instant precedent response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GetPredictionDebt fetches the prediction debt health metric.
 func (c *Client) GetPredictionDebt(ctx context.Context) (*PredictionDebt, error) {
 	ctx, cancel := context.WithTimeout(ctx, accountTimeout)

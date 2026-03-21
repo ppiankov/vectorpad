@@ -119,6 +119,23 @@ type precedentResultMsg struct {
 	textHash string
 }
 
+// instantPrecState tracks the debounced instant precedent lookup (300ms).
+type instantPrecState struct {
+	status   precedentStatus
+	textHash string
+	seq      int
+}
+
+// instantPrecTickMsg fires after the 300ms instant precedent debounce.
+type instantPrecTickMsg struct{ seq int }
+
+// instantPrecResultMsg carries the async instant precedent result.
+type instantPrecResultMsg struct {
+	result   *vectorcourt.InstantPrecedentResult
+	err      error
+	textHash string
+}
+
 // AppModel is the top-level Bubbletea model for the three-panel TUI.
 type AppModel struct {
 	focus        panel
@@ -135,6 +152,7 @@ type AppModel struct {
 	lastScan     detect.ScanResult
 	preflight    preflightState
 	precedent    precedentState
+	instantPrec  instantPrecState
 	deliberation deliberationState
 	width        int
 	height       int
@@ -312,6 +330,44 @@ func (m *AppModel) startPrecedentSearch() tea.Cmd {
 	}
 }
 
+// maybeScheduleInstantPrec resets the 300ms instant precedent debounce on text change.
+func (m *AppModel) maybeScheduleInstantPrec(editorCmd tea.Cmd) tea.Cmd {
+	text := m.editor.value()
+	hash := textFingerprint(text)
+	if hash == m.instantPrec.textHash || text == "" {
+		return editorCmd
+	}
+	m.instantPrec.textHash = hash
+	m.instantPrec.seq++
+	m.instantPrec.status = precedentPending
+	m.risk.instantPrecedent = nil
+	seq := m.instantPrec.seq
+	tickCmd := tea.Tick(300*time.Millisecond, func(_ time.Time) tea.Msg {
+		return instantPrecTickMsg{seq: seq}
+	})
+	if editorCmd != nil {
+		return tea.Batch(editorCmd, tickCmd)
+	}
+	return tickCmd
+}
+
+// startInstantPrecSearch fires an async instant precedent lookup.
+func (m *AppModel) startInstantPrecSearch() tea.Cmd {
+	cfg, err := config.Load()
+	if err != nil || cfg.VectorCourt.APIKey == "" {
+		m.instantPrec.status = precedentIdle
+		return nil
+	}
+	m.instantPrec.status = precedentLoading
+	text := m.editor.value()
+	hash := m.instantPrec.textHash
+	return func() tea.Msg {
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+		result, err := client.InstantPrecedents(context.Background(), text, 5)
+		return instantPrecResultMsg{result: result, err: err, textHash: hash}
+	}
+}
+
 func (m *AppModel) loadStash() {
 	if m.store == nil {
 		return
@@ -377,6 +433,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.precedent.status = precedentLoaded
 		m.risk.precedentSearch = msg.search
+		return m, nil
+
+	case instantPrecTickMsg:
+		if msg.seq != m.instantPrec.seq {
+			return m, nil
+		}
+		return m, m.startInstantPrecSearch()
+
+	case instantPrecResultMsg:
+		if msg.textHash != m.instantPrec.textHash {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.instantPrec.status = precedentIdle
+			return m, nil
+		}
+		m.instantPrec.status = precedentLoaded
+		m.risk.instantPrecedent = msg.result
 		return m, nil
 
 	case deliberationTickMsg:
@@ -498,6 +572,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.editor.update(msg)
 		m.syncRisk()
 		cmd = m.maybeSchedulePreflight(cmd)
+		cmd = m.maybeScheduleInstantPrec(cmd)
 		return m, m.maybeSchedulePrecedent(cmd)
 	}
 
@@ -529,6 +604,7 @@ func (m *AppModel) updateEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cmd := m.editor.update(msg)
 	m.syncRisk()
 	cmd = m.maybeSchedulePreflight(cmd)
+	cmd = m.maybeScheduleInstantPrec(cmd)
 	return m, m.maybeSchedulePrecedent(cmd)
 }
 

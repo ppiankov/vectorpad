@@ -105,6 +105,23 @@ type PredictionDebt struct {
 	Note               string  `json:"note,omitempty"`
 }
 
+// InstantPrecedentMatch is a single match from the instant precedent endpoint.
+type InstantPrecedentMatch struct {
+	CaseID     string  `json:"case_id"`
+	Question   string  `json:"question"`
+	Similarity float64 `json:"similarity"`
+	Verdict    string  `json:"verdict"`
+	AgeDays    int     `json:"age_days"`
+}
+
+// InstantPrecedentResult is the response from GET /v1/precedents.
+type InstantPrecedentResult struct {
+	Matches       []InstantPrecedentMatch `json:"matches"`
+	MatchCount    int                     `json:"match_count"`
+	TopSimilarity float64                 `json:"top_similarity"`
+	Note          string                  `json:"note,omitempty"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool
