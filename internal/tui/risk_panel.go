@@ -110,20 +110,25 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		b.WriteString("\n")
 	}
 
-	// Pressure heat map — per-sentence risk
+	// Pressure heat map — compact single-line when one sentence.
 	if len(p.pressureScores) > 0 {
 		b.WriteString("\n")
-		b.WriteString(stylePanelTitle.Render("PRESSURE"))
-		b.WriteString("\n")
-		maxShow := 8
-		for i, ps := range p.pressureScores {
-			if i >= maxShow {
-				b.WriteString(styleMuted.Render(fmt.Sprintf("  ... +%d more", len(p.pressureScores)-maxShow)))
-				b.WriteString("\n")
-				break
-			}
-			b.WriteString(renderPressureBar(ps))
+		if len(p.pressureScores) == 1 {
+			b.WriteString(stylePanelTitle.Render("PRESSURE") + " " + renderPressureBarInline(p.pressureScores[0]))
 			b.WriteString("\n")
+		} else {
+			b.WriteString(stylePanelTitle.Render("PRESSURE"))
+			b.WriteString("\n")
+			maxShow := 8
+			for i, ps := range p.pressureScores {
+				if i >= maxShow {
+					b.WriteString(styleMuted.Render(fmt.Sprintf("  ... +%d more", len(p.pressureScores)-maxShow)))
+					b.WriteString("\n")
+					break
+				}
+				b.WriteString(renderPressureBar(ps))
+				b.WriteString("\n")
+			}
 		}
 	}
 
@@ -248,12 +253,10 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		}
 	}
 
-	// VectorCourt account status — only when configured and fetched.
+	// VectorCourt account status — compact header with tier.
 	if p.accountStatus != nil {
 		b.WriteString("\n")
-		b.WriteString(stylePanelTitle.Render("VECTORCOURT"))
-		b.WriteString("\n")
-		b.WriteString(styleMuted.Render(fmt.Sprintf("  tier: %s", p.accountStatus.Tier)))
+		b.WriteString(stylePanelTitle.Render(fmt.Sprintf("VECTORCOURT [%s]", p.accountStatus.Tier)))
 		b.WriteString("\n")
 		used := p.accountStatus.SubmissionsToday
 		limit := p.accountStatus.DailyLimit
@@ -402,23 +405,19 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 
 func (p riskPanel) renderPastewatchStatus(b *strings.Builder, caps detect.Capabilities, mode detect.PastewatchMode, scan detect.ScanResult) {
 	label := detect.StatusLabel(caps, mode)
-	b.WriteString(styleMuted.Render(" pastewatch: "))
 
 	if !caps.Pastewatch {
-		b.WriteString(styleMuted.Render(label))
+		b.WriteString(styleMuted.Render(" pastewatch: " + label))
 		b.WriteString("\n")
 		return
 	}
 
-	b.WriteString(styleMuted.Render(label))
-	b.WriteString("\n")
-
-	// Show scan result if there was a scan.
+	// Compact: pastewatch + clipboard status on one line.
 	if scan.Clean {
-		b.WriteString(styleSuccess.Render("  clipboard: ✓ clean"))
+		b.WriteString(styleMuted.Render(" pastewatch: "+label+" | ") + styleSuccess.Render("✓ clean"))
 		b.WriteString("\n")
 	} else {
-		b.WriteString(styleError.Render("  clipboard: ⚠ secrets detected"))
+		b.WriteString(styleMuted.Render(" pastewatch: "+label+" | ") + styleError.Render("⚠ secrets"))
 		b.WriteString("\n")
 		for _, finding := range scan.Findings {
 			b.WriteString(styleError.Render(fmt.Sprintf("    - %s", finding)))
@@ -450,6 +449,26 @@ func renderPressureBar(ps pressure.SentenceScore) string {
 		signals = " " + strings.Join(ps.Signals, ", ")
 	}
 	return s.Render(fmt.Sprintf("  %s %3d%s", bar, ps.Score, signals))
+}
+
+// renderPressureBarInline returns a compact bar without leading whitespace (for inline use).
+func renderPressureBarInline(ps pressure.SentenceScore) string {
+	barLen := ps.Score / 10
+	if barLen < 1 && ps.Score > 0 {
+		barLen = 1
+	}
+	bar := strings.Repeat("█", barLen) + strings.Repeat("░", 10-barLen)
+
+	var s lipgloss.Style
+	switch ps.Level {
+	case pressure.LevelHigh:
+		s = styleError
+	case pressure.LevelMedium:
+		s = styleWarning
+	default:
+		s = styleSuccess
+	}
+	return s.Render(fmt.Sprintf("%s %d", bar, ps.Score))
 }
 
 func describeDriftChange(axis drift.Axis, c drift.TokenChange) string {
