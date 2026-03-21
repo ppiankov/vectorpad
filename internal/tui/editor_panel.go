@@ -237,26 +237,36 @@ func (p editorPanel) View(focused bool) string {
 	b.WriteString(p.textarea.View())
 	b.WriteString("\n")
 
-	// Classified view (compact)
+	// Classified view — adaptive: shrink when text overflows editor.
 	if len(p.sentences) > 0 {
-		b.WriteString(styleMuted.Render("─── classified ───"))
-		b.WriteString("\n")
+		totalLines := p.textarea.LineCount()
+		visibleLines := p.textarea.Height()
 		maxLines := 6
-		lines := strings.Split(p.vectorBlock, "\n")
-		shown := 0
-		for _, line := range lines {
-			if shown >= maxLines {
-				b.WriteString(styleMuted.Render("  ..."))
-				b.WriteString("\n")
-				break
-			}
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" || trimmed == "VECTOR" {
-				continue
-			}
-			b.WriteString(renderClassifiedLine(trimmed))
+		if totalLines > visibleLines*2 {
+			maxLines = 0 // hide entirely for very long text
+		} else if totalLines > visibleLines {
+			maxLines = 2 // collapse for moderately long text
+		}
+
+		if maxLines > 0 {
+			b.WriteString(styleMuted.Render("─── classified ───"))
 			b.WriteString("\n")
-			shown++
+			lines := strings.Split(p.vectorBlock, "\n")
+			shown := 0
+			for _, line := range lines {
+				if shown >= maxLines {
+					b.WriteString(styleMuted.Render("  ..."))
+					b.WriteString("\n")
+					break
+				}
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" || trimmed == "VECTOR" {
+					continue
+				}
+				b.WriteString(renderClassifiedLine(trimmed))
+				b.WriteString("\n")
+				shown++
+			}
 		}
 	}
 
@@ -304,14 +314,24 @@ func (p editorPanel) renderDashboard() string {
 		return styleMuted.Render(" tokens: 0 | paste to begin")
 	}
 
-	return styleMuted.Render(fmt.Sprintf(
+	line := fmt.Sprintf(
 		" tokens: %d | integrity: %.0f%% | CPD: $%.4f | TTC: %.1f | CDR: %.2f",
 		m.TokenWeight.Estimated,
 		m.VectorIntegrity.Percentage,
 		m.CPDProjection,
 		m.TTCProjection,
 		m.CDRProjection,
-	))
+	)
+
+	// Show line indicator when text overflows the visible area.
+	totalLines := p.textarea.LineCount()
+	visibleLines := p.textarea.Height()
+	if totalLines > visibleLines {
+		cursorLine := p.textarea.Line() + 1 // 0-based to 1-based
+		line += fmt.Sprintf(" | L%d/%d", cursorLine, totalLines)
+	}
+
+	return styleMuted.Render(line)
 }
 
 func renderClassifiedLine(line string) string {
