@@ -104,8 +104,8 @@ type deliberationTickMsg struct{}
 
 // deliberationResultMsg carries the async VectorCourt verdict back to Update.
 type deliberationResultMsg struct {
-	statusMsg string
-	err       error
+	statusMsg  string
+	err        error
 	vcSnapshot *flight.VectorCourtSnapshot
 }
 
@@ -161,8 +161,9 @@ func NewApp(store *stash.Store, caps detect.Capabilities) AppModel {
 	// Load contextspectre feedback on startup (nil if unavailable).
 	m.risk.feedback = detect.ReadFeedback(caps)
 	m.risk.decisionEcon = detect.ReadDecisionEconomics(caps)
-	// Load VectorCourt account status on startup (nil if no key or fetch fails).
+	// Load VectorCourt account status and prediction debt on startup (nil if no key or fetch fails).
 	m.refreshAccountStatus()
+	m.refreshPredictionDebt()
 	return m
 }
 
@@ -200,6 +201,24 @@ func (m *AppModel) refreshAccountStatus() {
 		return
 	}
 	m.risk.accountStatus = status
+}
+
+// refreshPredictionDebt loads VectorCourt prediction debt into the risk panel.
+func (m *AppModel) refreshPredictionDebt() {
+	cfg, err := config.Load()
+	if err != nil || cfg.VectorCourt.APIKey == "" {
+		m.risk.predictionDebt = nil
+		return
+	}
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	debt, err := client.GetPredictionDebt(ctx)
+	if err != nil {
+		m.risk.predictionDebt = nil
+		return
+	}
+	m.risk.predictionDebt = debt
 }
 
 // maybeSchedulePreflight resets the debounce timer if text changed and VectorCourt key is configured.

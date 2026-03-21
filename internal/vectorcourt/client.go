@@ -257,6 +257,42 @@ func (c *Client) ReportOutcome(ctx context.Context, caseID string, req *OutcomeR
 	return &result, nil
 }
 
+// GetPredictionDebt fetches the prediction debt health metric.
+func (c *Client) GetPredictionDebt(ctx context.Context) (*PredictionDebt, error) {
+	ctx, cancel := context.WithTimeout(ctx, accountTimeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint+"/v1/health/prediction-debt", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("prediction debt request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result PredictionDebt
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse prediction debt response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // APIError represents a non-2xx response from the VectorCourt API.
 type APIError struct {
 	StatusCode int

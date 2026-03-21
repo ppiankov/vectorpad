@@ -95,6 +95,16 @@ type OutcomeResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+// PredictionDebt mirrors VectorCourt's GET /v1/health/prediction-debt response.
+type PredictionDebt struct {
+	OpenPredictions    int     `json:"open_predictions"`
+	OverduePredictions int     `json:"overdue_predictions"`
+	OldestOpenDays     int     `json:"oldest_open_days"`
+	DebtRatio          float64 `json:"debt_ratio"`
+	Band               string  `json:"band"` // healthy, accumulating, critical
+	Note               string  `json:"note,omitempty"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool

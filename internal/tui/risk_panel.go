@@ -11,9 +11,9 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/drift"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
-	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/scopedecl"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
 
 type riskPanel struct {
@@ -28,6 +28,7 @@ type riskPanel struct {
 	feedback           *detect.Feedback
 	decisionEcon       *detect.DecisionEcon
 	accountStatus      *vectorcourt.AccountStatus
+	predictionDebt     *vectorcourt.PredictionDebt
 	preflightReadiness *vectorcourt.GateResult
 	precedentSearch    *vectorcourt.PrecedentSearch
 	width              int
@@ -282,6 +283,19 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 			b.WriteString(styleError.Render("  ACCOUNT INACTIVE"))
 			b.WriteString("\n")
 		}
+	}
+
+	// Prediction debt health — shown below account status when available.
+	if p.predictionDebt != nil {
+		debtStyle := styleSuccess
+		switch p.predictionDebt.Band {
+		case "accumulating":
+			debtStyle = styleWarning
+		case "critical":
+			debtStyle = styleError
+		}
+		b.WriteString(debtStyle.Render(fmt.Sprintf("  learning: debt %.2f (%s)", p.predictionDebt.DebtRatio, p.predictionDebt.Band)))
+		b.WriteString("\n")
 	}
 
 	// Live preflight readiness — shown below VECTORCOURT section when available.
