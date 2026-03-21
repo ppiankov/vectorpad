@@ -89,6 +89,14 @@ func (p *editorPanel) update(msg tea.Msg) tea.Cmd {
 			// Remove the path from textarea — it's now an object.
 			p.textarea.SetValue(prevValue)
 		}
+
+		// Paste into empty editor: scroll cursor to top so text is visible.
+		if prevValue == "" && len(newValue) > 1 {
+			for range p.estimateVisualLines() + 10 {
+				p.textarea.CursorUp()
+			}
+			p.textarea.CursorStart()
+		}
 	}
 
 	p.reclassify()
