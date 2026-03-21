@@ -67,7 +67,7 @@ func (p *editorPanel) blur() {
 func (p *editorPanel) resize(width, height int) {
 	p.width = width
 	p.height = height
-	editorHeight := height - 12 // room for classified view + dashboard
+	editorHeight := height - 16 // room for title + dashboard + classified + hint bar + border
 	if editorHeight < 3 {
 		editorHeight = 3
 	}
@@ -245,7 +245,7 @@ func (p editorPanel) View(focused bool) string {
 	if len(p.sentences) > 0 {
 		visualLines := p.estimateVisualLines()
 		visibleLines := p.textarea.Height()
-		maxLines := 6
+		maxLines := 4
 		if visualLines > visibleLines*2 {
 			maxLines = 0 // hide entirely for very long text
 		} else if visualLines > visibleLines {
