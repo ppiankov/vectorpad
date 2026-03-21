@@ -90,13 +90,6 @@ func (p *editorPanel) update(msg tea.Msg) tea.Cmd {
 			p.textarea.SetValue(prevValue)
 		}
 
-		// Paste into empty editor: scroll cursor to top so text is visible.
-		if prevValue == "" && len(newValue) > 1 {
-			for range p.estimateVisualLines() + 10 {
-				p.textarea.CursorUp()
-			}
-			p.textarea.CursorStart()
-		}
 	}
 
 	p.reclassify()
@@ -242,7 +235,10 @@ func (p editorPanel) View(focused bool) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(p.textarea.View())
+	// Dashboard bar (above textarea so text appears at bottom)
+	b.WriteString(styleMuted.Render("─── dashboard ───"))
+	b.WriteString("\n")
+	b.WriteString(p.renderDashboard())
 	b.WriteString("\n")
 
 	// Classified view — adaptive: shrink when text overflows editor.
@@ -288,12 +284,6 @@ func (p editorPanel) View(focused bool) string {
 		}
 	}
 
-	// Dashboard bar
-	b.WriteString(styleMuted.Render("─── dashboard ───"))
-	b.WriteString("\n")
-	b.WriteString(p.renderDashboard())
-	b.WriteString("\n")
-
 	// Deliberation status
 	if p.deliberationMsg != "" {
 		b.WriteString(styleWarning.Render(p.deliberationMsg))
@@ -309,6 +299,10 @@ func (p editorPanel) View(focused bool) string {
 		b.WriteString(styleError.Render(p.copyMsg))
 		b.WriteString("\n")
 	}
+
+	// Textarea at the bottom — pasted text appears where user is looking.
+	b.WriteString(p.textarea.View())
+	b.WriteString("\n")
 
 	// Hint bar
 	b.WriteString(styleDim.Render(" ctrl+y copy  ctrl+s stash  ctrl+l launch  ctrl+d scope  ctrl+h help"))
