@@ -18,12 +18,12 @@ import (
 	"github.com/ppiankov/vectorpad/internal/detect"
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
-	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/preflight"
 	"github.com/ppiankov/vectorpad/internal/pressure"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/tui"
 	"github.com/ppiankov/vectorpad/internal/vector"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
 
 var version = "dev"
@@ -723,6 +723,7 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	var target, output string
 	dryRun := false
 	noPreflight := false
+	live := false
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -740,11 +741,13 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 			dryRun = true
 		case "--no-preflight":
 			noPreflight = true
+		case "--live":
+			live = true
 		}
 	}
 
 	if target != "vectorcourt" {
-		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to vectorcourt [--output file.json] [--dry-run] [--no-preflight]")
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad submit --to vectorcourt [--output file.json] [--dry-run] [--no-preflight] [--live]")
 		return 1
 	}
 
@@ -824,6 +827,25 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
+	}
+
+	// Stream live spar events if --live and stdout is a terminal.
+	if live {
+		var envelope struct {
+			CaseID string `json:"case_id"`
+		}
+		if json.Unmarshal(raw, &envelope) == nil && envelope.CaseID != "" {
+			f, _ := stdout.(*os.File)
+			isTTY := f != nil && isTerminal(f)
+			if isTTY {
+				events, err := vectorcourt.StreamSpar(context.Background(), cfg.Endpoint(), envelope.CaseID)
+				if err != nil {
+					_, _ = fmt.Fprintf(stderr, "live stream unavailable: %v\n", err)
+				} else {
+					tui.RenderSpar(events, stderr)
+				}
+			}
+		}
 	}
 
 	// Pretty-print the response.

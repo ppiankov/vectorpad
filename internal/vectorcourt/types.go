@@ -122,6 +122,16 @@ type InstantPrecedentResult struct {
 	Note          string                  `json:"note,omitempty"`
 }
 
+// SparEvent is a single SSE event from the live spar stream.
+type SparEvent struct {
+	ID        int    `json:"id"`
+	Stage     string `json:"stage"`
+	Message   string `json:"message"`
+	Persona   string `json:"persona,omitempty"`
+	Timestamp string `json:"timestamp"`
+	Final     bool   `json:"final"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool
