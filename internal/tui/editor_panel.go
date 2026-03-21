@@ -239,12 +239,12 @@ func (p editorPanel) View(focused bool) string {
 
 	// Classified view — adaptive: shrink when text overflows editor.
 	if len(p.sentences) > 0 {
-		totalLines := p.textarea.LineCount()
+		visualLines := p.estimateVisualLines()
 		visibleLines := p.textarea.Height()
 		maxLines := 6
-		if totalLines > visibleLines*2 {
+		if visualLines > visibleLines*2 {
 			maxLines = 0 // hide entirely for very long text
-		} else if totalLines > visibleLines {
+		} else if visualLines > visibleLines {
 			maxLines = 2 // collapse for moderately long text
 		}
 
@@ -324,14 +324,37 @@ func (p editorPanel) renderDashboard() string {
 	)
 
 	// Show line indicator when text overflows the visible area.
-	totalLines := p.textarea.LineCount()
+	visualLines := p.estimateVisualLines()
 	visibleLines := p.textarea.Height()
-	if totalLines > visibleLines {
+	if visualLines > visibleLines {
 		cursorLine := p.textarea.Line() + 1 // 0-based to 1-based
+		totalLines := p.textarea.LineCount()
 		line += fmt.Sprintf(" | L%d/%d", cursorLine, totalLines)
 	}
 
 	return styleMuted.Render(line)
+}
+
+// estimateVisualLines returns how many visual lines the text occupies,
+// accounting for word wrapping. A single long sentence that wraps across
+// 3 visual lines returns 3, not 1.
+func (p editorPanel) estimateVisualLines() int {
+	w := p.textarea.Width()
+	if w <= 0 {
+		w = 60
+	}
+	total := 0
+	for _, line := range strings.Split(p.textarea.Value(), "\n") {
+		if len(line) == 0 {
+			total++
+		} else {
+			total += (len(line) + w - 1) / w
+		}
+	}
+	if total == 0 {
+		total = 1
+	}
+	return total
 }
 
 func renderClassifiedLine(line string) string {
