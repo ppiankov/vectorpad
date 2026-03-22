@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/ppiankov/vectorpad/internal/config"
-	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 	"github.com/ppiankov/vectorpad/internal/stash"
+	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
 
 // launchTarget represents a destination for the vector payload.
@@ -136,8 +136,10 @@ func stashVerdict(raw json.RawMessage, question string) {
 // formatVerdictSummary extracts a brief status line from the verdict JSON.
 func formatVerdictSummary(raw json.RawMessage, gate *vectorcourt.GateResult) string {
 	var envelope struct {
-		Verdict string `json:"verdict"`
-		Status  string `json:"status"`
+		Verdict    string                          `json:"verdict"`
+		Status     string                          `json:"status"`
+		CaseID     string                          `json:"case_id"`
+		Escalation *vectorcourt.EscalationDecision `json:"escalation,omitempty"`
 	}
 	if json.Unmarshal(raw, &envelope) == nil {
 		parts := []string{"vectorcourt"}
@@ -154,9 +156,24 @@ func formatVerdictSummary(raw json.RawMessage, gate *vectorcourt.GateResult) str
 		if gate != nil && gate.Tier != "" {
 			parts = append(parts, fmt.Sprintf("(tier: %s)", gate.Tier))
 		}
+		if envelope.Escalation != nil && envelope.Escalation.Mode == "human_clarification" {
+			parts = append(parts, fmt.Sprintf("⚠ %d questions — run: vectorpad clarify %s", len(envelope.Escalation.Questions), envelope.CaseID))
+		}
 		return strings.Join(parts, " — ")
 	}
 	return fmt.Sprintf("vectorcourt — verdict received (%d bytes)", len(raw))
+}
+
+// ParseEscalation extracts escalation data from the raw verdict JSON.
+func ParseEscalation(raw json.RawMessage) (*vectorcourt.EscalationDecision, string) {
+	var envelope struct {
+		CaseID     string                          `json:"case_id"`
+		Escalation *vectorcourt.EscalationDecision `json:"escalation,omitempty"`
+	}
+	if json.Unmarshal(raw, &envelope) == nil && envelope.Escalation != nil {
+		return envelope.Escalation, envelope.CaseID
+	}
+	return nil, ""
 }
 
 func (o *launchOverlay) show() {

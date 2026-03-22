@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -58,6 +59,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 			return runPrecedent(args[2:], stdin, stdout, stderr)
 		case "outcome":
 			return runOutcome(args[2:], stdout, stderr)
+		case "clarify":
+			return runClarify(args[2:], stdin, stdout, stderr)
 		}
 	}
 
@@ -848,6 +851,22 @@ func runSubmit(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 		}
 	}
 
+	// Check for escalation questions.
+	escalation, caseID := tui.ParseEscalation(raw)
+	if escalation != nil && escalation.Mode == "human_clarification" && len(escalation.Questions) > 0 {
+		_, _ = fmt.Fprintf(stderr, "\n⚠ clarification needed (%d questions):\n", len(escalation.Questions))
+		for i, q := range escalation.Questions {
+			_, _ = fmt.Fprintf(stderr, "  %d. [%s] %s\n", i+1, q.ImpactOnVerdict, q.Question)
+			if q.Context != "" {
+				_, _ = fmt.Fprintf(stderr, "     %s\n", q.Context)
+			}
+			if q.DefaultIfUnanswered != "" {
+				_, _ = fmt.Fprintf(stderr, "     default: %s\n", q.DefaultIfUnanswered)
+			}
+		}
+		_, _ = fmt.Fprintf(stderr, "\nrun: vectorpad clarify %s\n", caseID)
+	}
+
 	// Pretty-print the response.
 	var formatted []byte
 	var pretty json.RawMessage
@@ -1206,6 +1225,128 @@ complete -c vectorpad -n '__fish_use_subcommand' -a precedent -d 'Search similar
 complete -c vectorpad -n '__fish_use_subcommand' -a outcome -d 'Report outcome for a past verdict'
 complete -c vectorpad -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 `
+
+func runClarify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	jsonMode := false
+	var caseID string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--json":
+			jsonMode = true
+		default:
+			if caseID == "" {
+				caseID = args[i]
+			}
+		}
+	}
+
+	if caseID == "" {
+		_, _ = fmt.Fprintln(stderr, "usage: vectorpad clarify <case-id> [--json]")
+		return 1
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if cfg.VectorCourt.APIKey == "" {
+		_, _ = fmt.Fprintln(stderr, "error: no API key configured (run: vectorpad config set vectorcourt.api_key <key>)")
+		return 1
+	}
+
+	// JSON mode: read answers from stdin.
+	if jsonMode {
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		var req vectorcourt.ClarifyRequest
+		if err := json.Unmarshal(data, &req); err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: invalid JSON: %v\n", err)
+			return 1
+		}
+
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+		_, _ = fmt.Fprintln(stderr, "submitting clarification...")
+		raw, err := client.SubmitClarification(context.Background(), caseID, &req)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+
+		var pretty json.RawMessage
+		if json.Unmarshal(raw, &pretty) == nil {
+			if f, err := json.MarshalIndent(pretty, "", "  "); err == nil {
+				_, _ = fmt.Fprintln(stdout, string(f))
+				return 0
+			}
+		}
+		_, _ = fmt.Fprintln(stdout, string(raw))
+		return 0
+	}
+
+	// Interactive mode: prompt for each answer.
+	f, ok := stdin.(*os.File)
+	if !ok || !isTerminal(f) {
+		_, _ = fmt.Fprintln(stderr, "error: interactive mode requires a terminal (use --json for pipe input)")
+		return 1
+	}
+
+	// Fetch the case to get pending questions.
+	// We don't have a "get case" endpoint, so prompt the user to provide question IDs.
+	_, _ = fmt.Fprintln(stderr, "Enter answers for case "+caseID)
+	_, _ = fmt.Fprintln(stderr, "Format: one answer per line as question_id=answer (empty line to submit)")
+	_, _ = fmt.Fprintln(stderr, "")
+
+	scanner := bufio.NewScanner(stdin)
+	var answers []vectorcourt.ClarificationAnswer
+	for {
+		_, _ = fmt.Fprint(stderr, "> ")
+		if !scanner.Scan() {
+			break
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			break
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			_, _ = fmt.Fprintln(stderr, "  invalid format, use: question_id=answer")
+			continue
+		}
+		answers = append(answers, vectorcourt.ClarificationAnswer{
+			QuestionID: strings.TrimSpace(parts[0]),
+			Answer:     strings.TrimSpace(parts[1]),
+			Confidence: "firm",
+		})
+	}
+
+	if len(answers) == 0 {
+		_, _ = fmt.Fprintln(stderr, "no answers provided")
+		return 1
+	}
+
+	client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+	_, _ = fmt.Fprintf(stderr, "submitting %d answers...\n", len(answers))
+	raw, err := client.SubmitClarification(context.Background(), caseID, &vectorcourt.ClarifyRequest{Answers: answers})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+
+	var pretty json.RawMessage
+	if json.Unmarshal(raw, &pretty) == nil {
+		if f, err := json.MarshalIndent(pretty, "", "  "); err == nil {
+			_, _ = fmt.Fprintln(stdout, string(f))
+			return 0
+		}
+	}
+	_, _ = fmt.Fprintln(stdout, string(raw))
+	return 0
+}
 
 func isTerminal(f *os.File) bool {
 	info, err := f.Stat()

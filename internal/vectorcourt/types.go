@@ -132,6 +132,38 @@ type SparEvent struct {
 	Final     bool   `json:"final"`
 }
 
+// EscalationDecision is the council's escalation disposition from the verdict.
+type EscalationDecision struct {
+	Mode      string                  `json:"mode"` // auto_resolve, resolve_with_caveat, human_clarification, human_approval
+	Score     float64                 `json:"score"`
+	Triggers  []string                `json:"triggers,omitempty"`
+	Questions []ClarificationQuestion `json:"questions,omitempty"`
+}
+
+// ClarificationQuestion is a structured question the council asks the human.
+type ClarificationQuestion struct {
+	ID                  string `json:"id"`
+	Type                string `json:"type"` // constraint_missing, constraint_conflict, preference, stakes_confirm, approval, falsification
+	Question            string `json:"question"`
+	Context             string `json:"context"`
+	ConstraintField     string `json:"constraint_field,omitempty"`
+	DefaultIfUnanswered string `json:"default_if_unanswered,omitempty"`
+	ImpactOnVerdict     string `json:"impact_on_verdict"` // high, medium, low
+}
+
+// ClarificationAnswer captures the human's response to one clarification question.
+type ClarificationAnswer struct {
+	QuestionID string `json:"question_id"`
+	Answer     string `json:"answer"`
+	Confidence string `json:"confidence"` // firm, preferred, uncertain
+	Notes      string `json:"notes,omitempty"`
+}
+
+// ClarifyRequest is the JSON body for POST /v1/cases/:id/clarify.
+type ClarifyRequest struct {
+	Answers []ClarificationAnswer `json:"answers"`
+}
+
 // GateResult is the outcome of a preflight gate check.
 type GateResult struct {
 	Allowed  bool

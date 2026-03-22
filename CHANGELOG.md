@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.23.0] - 2026-03-22
+
+### Added
+- Escalation support: parse clarification questions from VectorCourt verdicts
+- `SubmitClarification()` client method for POST /v1/cases/:id/clarify
+- `vectorpad clarify <case-id>` CLI command: interactive or `--json` pipe mode
+- CLI submit output shows escalation questions with impact level and defaults
+- TUI verdict summary shows clarification hint with case ID
+
 ## [0.22.0] - 2026-03-21
 
 ### Added

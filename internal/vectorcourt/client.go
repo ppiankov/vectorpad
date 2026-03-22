@@ -294,6 +294,43 @@ func (c *Client) InstantPrecedents(ctx context.Context, query string, limit int)
 	return &result, nil
 }
 
+// SubmitClarification sends clarification answers and triggers re-deliberation.
+func (c *Client) SubmitClarification(ctx context.Context, caseID string, req *ClarifyRequest) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, consultTimeout)
+	defer cancel()
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/v1/cases/"+caseID+"/clarify", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("clarify request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	return json.RawMessage(respBody), nil
+}
+
 // GetPredictionDebt fetches the prediction debt health metric.
 func (c *Client) GetPredictionDebt(ctx context.Context) (*PredictionDebt, error) {
 	ctx, cancel := context.WithTimeout(ctx, accountTimeout)
