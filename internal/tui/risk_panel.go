@@ -110,19 +110,26 @@ func (p riskPanel) render(caps detect.Capabilities, mode detect.PastewatchMode, 
 		b.WriteString("\n")
 	}
 
-	// Pressure heat map — compact single-line when one sentence.
+	// Pressure heat map — only show sentences with non-zero pressure.
 	if len(p.pressureScores) > 0 {
-		b.WriteString("\n")
-		if len(p.pressureScores) == 1 {
-			b.WriteString(stylePanelTitle.Render("PRESSURE") + " " + renderPressureBarInline(p.pressureScores[0]))
+		var hot []pressure.SentenceScore
+		for _, ps := range p.pressureScores {
+			if ps.Score > 0 {
+				hot = append(hot, ps)
+			}
+		}
+		if len(hot) == 0 {
+			b.WriteString("\n")
+			b.WriteString(stylePanelTitle.Render("PRESSURE") + " " + styleSuccess.Render("✓ clear"))
 			b.WriteString("\n")
 		} else {
-			b.WriteString(stylePanelTitle.Render("PRESSURE"))
+			b.WriteString("\n")
+			b.WriteString(stylePanelTitle.Render("PRESSURE") + " " + styleWarning.Render(fmt.Sprintf("%d/%d hot", len(hot), len(p.pressureScores))))
 			b.WriteString("\n")
 			maxShow := 8
-			for i, ps := range p.pressureScores {
+			for i, ps := range hot {
 				if i >= maxShow {
-					b.WriteString(styleMuted.Render(fmt.Sprintf("  ... +%d more", len(p.pressureScores)-maxShow)))
+					b.WriteString(styleMuted.Render(fmt.Sprintf("  ... +%d more", len(hot)-maxShow)))
 					b.WriteString("\n")
 					break
 				}
@@ -449,26 +456,6 @@ func renderPressureBar(ps pressure.SentenceScore) string {
 		signals = " " + strings.Join(ps.Signals, ", ")
 	}
 	return s.Render(fmt.Sprintf("  %s %3d%s", bar, ps.Score, signals))
-}
-
-// renderPressureBarInline returns a compact bar without leading whitespace (for inline use).
-func renderPressureBarInline(ps pressure.SentenceScore) string {
-	barLen := ps.Score / 10
-	if barLen < 1 && ps.Score > 0 {
-		barLen = 1
-	}
-	bar := strings.Repeat("█", barLen) + strings.Repeat("░", 10-barLen)
-
-	var s lipgloss.Style
-	switch ps.Level {
-	case pressure.LevelHigh:
-		s = styleError
-	case pressure.LevelMedium:
-		s = styleWarning
-	default:
-		s = styleSuccess
-	}
-	return s.Render(fmt.Sprintf("%s %d", bar, ps.Score))
 }
 
 func describeDriftChange(axis drift.Axis, c drift.TokenChange) string {
