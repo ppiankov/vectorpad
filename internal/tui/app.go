@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -96,11 +98,43 @@ type deliberationState struct {
 	status    deliberationStatus
 	startTime time.Time
 	cancel    context.CancelFunc
-	flightID  string // ID of the flight record to update with VectorCourt data
+	flightID  string                       // ID of the flight record to update with VectorCourt data
+	sparMsg   string                       // latest spar event message for live display
+	queuePos  int                          // queue position (0 = not queued / processing)
+	sparCh    <-chan vectorcourt.SparEvent // SSE event channel (nil when not streaming)
 }
 
 // deliberationTickMsg fires every second to update the elapsed timer.
 type deliberationTickMsg struct{}
+
+// deliberationSubmittedMsg signals that /v1/submit returned successfully.
+// The Update handler starts polling and SSE streaming.
+type deliberationSubmittedMsg struct {
+	submissionID string
+	caseID       string
+	position     int
+	client       *vectorcourt.Client
+	question     string
+	gate         *vectorcourt.GateResult
+	vcSnapshot   *flight.VectorCourtSnapshot
+}
+
+// deliberationPollMsg carries an intermediate poll result.
+type deliberationPollMsg struct {
+	status       *vectorcourt.SubmissionStatus
+	err          error
+	client       *vectorcourt.Client
+	submissionID string
+	caseID       string
+	question     string
+	gate         *vectorcourt.GateResult
+	vcSnapshot   *flight.VectorCourtSnapshot
+}
+
+// deliberationSparMsg carries a live spar event into the TUI.
+type deliberationSparMsg struct {
+	event vectorcourt.SparEvent
+}
 
 // deliberationResultMsg carries the async VectorCourt verdict back to Update.
 type deliberationResultMsg struct {
@@ -458,13 +492,89 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editor.deliberationMsg = ""
 			return m, nil
 		}
-		// Update elapsed time display.
 		elapsed := time.Since(m.deliberation.startTime).Truncate(time.Second)
-		m.editor.deliberationMsg = fmt.Sprintf(" ⏳ deliberating... (%s)", elapsed)
-		// Keep ticking every second while deliberation is active.
+		if m.deliberation.sparMsg != "" {
+			m.editor.deliberationMsg = fmt.Sprintf(" ⏳ %s (%s)", m.deliberation.sparMsg, elapsed)
+		} else if m.deliberation.queuePos > 0 {
+			m.editor.deliberationMsg = fmt.Sprintf(" ⏳ queued #%d (%s)", m.deliberation.queuePos, elapsed)
+		} else {
+			m.editor.deliberationMsg = fmt.Sprintf(" ⏳ deliberating... (%s)", elapsed)
+		}
 		return m, tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 			return deliberationTickMsg{}
 		})
+
+	case deliberationSubmittedMsg:
+		if m.deliberation.status != deliberationActive {
+			return m, nil
+		}
+		m.deliberation.queuePos = msg.position
+		m.editor.copyMsg = fmt.Sprintf("submitted — queue #%d", msg.position)
+
+		// Start polling and SSE stream in parallel.
+		pollCmd := m.startPollCmd(msg)
+		streamCmd := m.startStreamCmd(msg.submissionID, msg.client)
+		return m, tea.Batch(pollCmd, streamCmd)
+
+	case deliberationPollMsg:
+		if m.deliberation.status != deliberationActive {
+			return m, nil
+		}
+		if msg.err != nil {
+			return m, tea.Tick(pollInterval, func(_ time.Time) tea.Msg {
+				return m.pollOnce(msg.client, msg.submissionID, msg.caseID, msg.question, msg.gate, msg.vcSnapshot)
+			})
+		}
+		switch msg.status.Status {
+		case "completed":
+			raw := msg.status.Verdict
+			if len(raw) == 0 {
+				// Fetch full case if verdict not inline.
+				var err error
+				raw, err = msg.client.GetCase(context.Background(), msg.caseID)
+				if err != nil {
+					return m, nil
+				}
+			}
+			stashVerdict(raw, msg.question)
+			// Trigger the result message to finalize.
+			resultCmd := func() tea.Msg {
+				return deliberationResultMsg{
+					statusMsg:  formatVerdictSummary(raw, msg.gate),
+					vcSnapshot: msg.vcSnapshot,
+				}
+			}
+			return m, resultCmd
+		case "failed":
+			errMsg := "deliberation failed"
+			if msg.status.Error != "" {
+				errMsg = msg.status.Error
+			}
+			resultCmd := func() tea.Msg {
+				return deliberationResultMsg{
+					err:        fmt.Errorf("%s", errMsg),
+					vcSnapshot: msg.vcSnapshot,
+				}
+			}
+			return m, resultCmd
+		default:
+			m.deliberation.queuePos = msg.status.Position
+			return m, tea.Tick(pollInterval, func(_ time.Time) tea.Msg {
+				return m.pollOnce(msg.client, msg.submissionID, msg.caseID, msg.question, msg.gate, msg.vcSnapshot)
+			})
+		}
+
+	case deliberationSparMsg:
+		if m.deliberation.status != deliberationActive {
+			return m, nil
+		}
+		m.deliberation.sparMsg = msg.event.Message
+		// Continue reading from the stream.
+		if m.deliberation.sparCh != nil && !msg.event.Final {
+			ch := m.deliberation.sparCh
+			return m, func() tea.Msg { return readNextSpar(ch) }
+		}
+		return m, nil
 
 	case deliberationResultMsg:
 		// Attach VectorCourt snapshot to flight record (best-effort).
@@ -474,6 +584,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.deliberation.status = deliberationIdle
 		m.deliberation.cancel = nil
 		m.deliberation.flightID = ""
+		m.deliberation.sparMsg = ""
+		m.deliberation.queuePos = 0
+		m.deliberation.sparCh = nil
 		m.editor.deliberationMsg = ""
 		if msg.err != nil {
 			m.editor.copyStatus = copyError
@@ -975,19 +1088,38 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 			snap.FilingQuality = gate.Quality
 		}
 
-		// Submit for deliberation.
-		raw, err := client.Consult(ctx, &vectorcourt.ConsultRequest{
+		// Try async submit flow; fall back to sync Consult on 404/501.
+		sub, submitErr := client.Submit(ctx, &vectorcourt.SubmitRequest{
 			Question: question,
 			Filing:   filing,
 		})
-		if err != nil {
-			return deliberationResultMsg{err: fmt.Errorf("consult: %w", err), vcSnapshot: snap}
+		if submitErr != nil {
+			var apiErr *vectorcourt.APIError
+			if errors.As(submitErr, &apiErr) && (apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusNotImplemented) {
+				// Server doesn't support async flow — use sync Consult.
+				raw, err := client.Consult(ctx, &vectorcourt.ConsultRequest{
+					Question: question,
+					Filing:   filing,
+				})
+				if err != nil {
+					return deliberationResultMsg{err: fmt.Errorf("consult: %w", err), vcSnapshot: snap}
+				}
+				stashVerdict(raw, question)
+				return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate), vcSnapshot: snap}
+			}
+			return deliberationResultMsg{err: fmt.Errorf("submit: %w", submitErr), vcSnapshot: snap}
 		}
 
-		// Auto-stash the verdict.
-		stashVerdict(raw, question)
-
-		return deliberationResultMsg{statusMsg: formatVerdictSummary(raw, gate), vcSnapshot: snap}
+		// Async submit accepted — hand off to poll+stream phase.
+		return deliberationSubmittedMsg{
+			submissionID: sub.SubmissionID,
+			caseID:       sub.CaseID,
+			position:     sub.Position,
+			client:       client,
+			question:     question,
+			gate:         gate,
+			vcSnapshot:   snap,
+		}
 	}
 
 	tickCmd := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
@@ -995,6 +1127,64 @@ func (m *AppModel) startDeliberation(payload string) tea.Cmd {
 	})
 
 	return tea.Batch(submitCmd, tickCmd)
+}
+
+const pollInterval = 2 * time.Second
+
+// startPollCmd returns a tea.Cmd that does the first poll after a delay.
+func (m *AppModel) startPollCmd(msg deliberationSubmittedMsg) tea.Cmd {
+	return tea.Tick(pollInterval, func(_ time.Time) tea.Msg {
+		return m.pollOnce(msg.client, msg.submissionID, msg.caseID, msg.question, msg.gate, msg.vcSnapshot)
+	})
+}
+
+// pollOnce performs a single poll and returns a deliberationPollMsg.
+func (m *AppModel) pollOnce(client *vectorcourt.Client, submissionID, caseID, question string, gate *vectorcourt.GateResult, snap *flight.VectorCourtSnapshot) tea.Msg {
+	status, err := client.PollSubmission(context.Background(), submissionID)
+	if err != nil {
+		return deliberationPollMsg{
+			err:          err,
+			client:       client,
+			submissionID: submissionID,
+			caseID:       caseID,
+			question:     question,
+			gate:         gate,
+			vcSnapshot:   snap,
+		}
+	}
+
+	return deliberationPollMsg{
+		status:       status,
+		client:       client,
+		submissionID: submissionID,
+		caseID:       caseID,
+		question:     question,
+		gate:         gate,
+		vcSnapshot:   snap,
+	}
+}
+
+// startStreamCmd connects to the SSE stream and returns the first event read command.
+func (m *AppModel) startStreamCmd(submissionID string, client *vectorcourt.Client) tea.Cmd {
+	endpoint := client.Endpoint()
+
+	return func() tea.Msg {
+		ch, err := vectorcourt.StreamSpar(context.Background(), endpoint, submissionID)
+		if err != nil {
+			return nil
+		}
+		m.deliberation.sparCh = ch
+		return readNextSpar(ch)
+	}
+}
+
+// readNextSpar reads the next event from the spar channel.
+func readNextSpar(ch <-chan vectorcourt.SparEvent) tea.Msg {
+	ev, ok := <-ch
+	if !ok {
+		return nil
+	}
+	return deliberationSparMsg{event: ev}
 }
 
 // recordLaunch appends a flight record for the launch and returns its ID.

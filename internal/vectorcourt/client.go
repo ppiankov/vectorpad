@@ -14,6 +14,8 @@ import (
 
 const (
 	consultTimeout   = 480 * time.Second
+	submitTimeout    = 15 * time.Second
+	pollTimeout      = 10 * time.Second
 	preflightTimeout = 10 * time.Second
 	accountTimeout   = 5 * time.Second
 	precedentTimeout = 10 * time.Second
@@ -34,6 +36,11 @@ func NewClient(endpoint, apiKey string) *Client {
 		apiKey:   apiKey,
 		http:     &http.Client{},
 	}
+}
+
+// Endpoint returns the base URL of the VectorCourt API.
+func (c *Client) Endpoint() string {
+	return c.endpoint
 }
 
 // Consult sends a case to VectorCourt for deliberation.
@@ -59,6 +66,116 @@ func (c *Client) Consult(ctx context.Context, req *ConsultRequest) (json.RawMess
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("consult request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	return json.RawMessage(respBody), nil
+}
+
+// Submit sends a case to VectorCourt for async deliberation.
+// Returns 202 with submission_id, case_id, and queue position.
+func (c *Client) Submit(ctx context.Context, req *SubmitRequest) (*SubmitResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, submitTimeout)
+	defer cancel()
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/v1/submit", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("submit request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result SubmitResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse submit response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// PollSubmission checks the status of an async submission.
+func (c *Client) PollSubmission(ctx context.Context, submissionID string) (*SubmissionStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint+"/v1/submissions/"+submissionID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("poll request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseAPIError(resp.StatusCode, respBody)
+	}
+
+	var result SubmissionStatus
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse submission status: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetCase fetches the full case (with verdict) by case ID.
+func (c *Client) GetCase(ctx context.Context, caseID string) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint+"/v1/cases/"+caseID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	if c.apiKey != "" {
+		httpReq.Header.Set(authHeader, c.apiKey)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get case request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

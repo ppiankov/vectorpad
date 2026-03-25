@@ -122,6 +122,30 @@ type InstantPrecedentResult struct {
 	Note          string                  `json:"note,omitempty"`
 }
 
+// SubmitRequest is the JSON body for POST /v1/submit (async submission).
+type SubmitRequest struct {
+	Question string      `json:"question"`
+	Filing   *CaseFiling `json:"filing,omitempty"`
+}
+
+// SubmitResponse is the 202 response from POST /v1/submit.
+type SubmitResponse struct {
+	SubmissionID string `json:"submission_id"`
+	CaseID       string `json:"case_id"`
+	Position     int    `json:"position,omitempty"`
+	Status       string `json:"status"` // queued
+}
+
+// SubmissionStatus is the response from GET /v1/submissions/{id}.
+type SubmissionStatus struct {
+	SubmissionID string          `json:"submission_id"`
+	CaseID       string          `json:"case_id"`
+	Status       string          `json:"status"` // queued, processing, completed, failed
+	Position     int             `json:"position,omitempty"`
+	Verdict      json.RawMessage `json:"verdict,omitempty"`
+	Error        string          `json:"error,omitempty"`
+}
+
 // SparEvent is a single SSE event from the live spar stream.
 type SparEvent struct {
 	ID        int    `json:"id"`
