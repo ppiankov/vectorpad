@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.23.2] - 2026-03-26
+
+### Fixed
+- Pressure panel: only show bars for non-zero sentences, display "✓ clear" when all safe
+
+## [0.23.1] - 2026-03-25
+
+### Added
+- Async submit flow: POST /v1/submit with queue position, poll loop, and live SSE spar events
+- `Submit()`, `PollSubmission()`, `GetCase()` client methods
+- Transparent fallback to sync `Consult()` when server returns 404/501
+
 ## [0.23.0] - 2026-03-22
 
 ### Added
