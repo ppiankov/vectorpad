@@ -2,9 +2,11 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/ppiankov/vectorpad/internal/flight"
 	"github.com/ppiankov/vectorpad/internal/negativespace"
 	"github.com/ppiankov/vectorpad/internal/pressure"
+	"github.com/ppiankov/vectorpad/internal/sidecar"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
@@ -599,6 +602,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshAccountStatus()
 		return m, nil
 
+	case sidecarInjectResultMsg:
+		m.deliberation.status = deliberationIdle
+		m.deliberation.cancel = nil
+		m.deliberation.flightID = ""
+		m.deliberation.sparMsg = ""
+		m.deliberation.queuePos = 0
+		m.deliberation.sparCh = nil
+		m.editor.deliberationMsg = ""
+		if msg.err != nil {
+			m.editor.copyStatus = copyError
+			m.editor.copyMsg = fmt.Sprintf("sidecar: %v", msg.err)
+		} else {
+			m.editor.copyStatus = copyCopied
+			m.editor.copyMsg = msg.statusMsg
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -951,7 +971,7 @@ func (m *AppModel) updateLaunchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.launch.dismiss()
 		return m, cmd
-	case "1", "2", "3", "4", "5", "6":
+	case "1", "2", "3", "4", "5", "6", "7", "8":
 		t := m.launch.selectByKey(msg.String())
 		var cmd tea.Cmd
 		if t != nil {
@@ -1009,6 +1029,17 @@ func (m *AppModel) executeLaunch(t *launchTarget) tea.Cmd {
 	if t.name == "VectorCourt" {
 		m.deliberation.flightID = flightID
 		return m.startDeliberation(payload)
+	}
+
+	// Sidecar: inject into active Claude Code session.
+	if t.name == "Sidecar (inject)" {
+		return m.executeSidecarInject(payload)
+	}
+
+	// Sidecar + deliberate: VectorCourt first, then inject.
+	if t.name == "Sidecar + deliberate" {
+		m.deliberation.flightID = flightID
+		return m.startSidecarDeliberation(payload)
 	}
 
 	statusMsg, err := t.action(payload)
@@ -1185,6 +1216,167 @@ func readNextSpar(ch <-chan vectorcourt.SparEvent) tea.Msg {
 		return nil
 	}
 	return deliberationSparMsg{event: ev}
+}
+
+// executeSidecarInject injects the payload directly into the active Claude Code session.
+func (m *AppModel) executeSidecarInject(payload string) tea.Cmd {
+	cwd, err := os.Getwd()
+	if err != nil {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = fmt.Sprintf("sidecar: %v", err)
+		return nil
+	}
+
+	sessions, err := sidecar.DiscoverSessions(cwd)
+	if err != nil || len(sessions) == 0 {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "sidecar: no active session found"
+		return nil
+	}
+
+	// Use the most recently modified session.
+	session := sessions[0]
+	if err := sidecar.InjectUserMessage(session.Path, payload); err != nil {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = fmt.Sprintf("sidecar inject failed: %v", err)
+		return nil
+	}
+
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = fmt.Sprintf("injected into session %s", session.ID[:8])
+	return nil
+}
+
+// sidecarInjectResultMsg carries the result of a sidecar deliberate+inject.
+type sidecarInjectResultMsg struct {
+	statusMsg string
+	err       error
+}
+
+// startSidecarDeliberation sends to VectorCourt for framing advice, then injects.
+func (m *AppModel) startSidecarDeliberation(payload string) tea.Cmd {
+	if m.deliberation.status == deliberationActive {
+		m.editor.copyStatus = copyError
+		m.editor.copyMsg = "deliberation already in progress"
+		return nil
+	}
+
+	m.deliberation.status = deliberationActive
+	m.deliberation.startTime = time.Now()
+	m.editor.copyStatus = copyCopied
+	m.editor.copyMsg = "deliberating framing... (0s)"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.deliberation.cancel = cancel
+
+	sentences := m.editor.sentences
+	text := payload
+
+	submitCmd := func() tea.Msg {
+		cfg, err := config.Load()
+		if err != nil {
+			return deliberationResultMsg{err: fmt.Errorf("load config: %w", err)}
+		}
+		if cfg.VectorCourt.APIKey == "" {
+			return deliberationResultMsg{err: fmt.Errorf("no API key configured")}
+		}
+
+		filing := vectorcourt.MapSentences(sentences)
+		question := vectorcourt.ExtractQuestion(sentences, text)
+		client := vectorcourt.NewClient(cfg.Endpoint(), cfg.VectorCourt.APIKey)
+
+		// Preflight gate.
+		gate, err := client.PreflightGate(ctx, question, filing)
+		if err != nil {
+			return deliberationResultMsg{err: fmt.Errorf("preflight: %w", err)}
+		}
+		if !gate.Allowed {
+			return deliberationResultMsg{err: fmt.Errorf("REJECTED: %s", gate.Reason)}
+		}
+
+		// Submit for deliberation.
+		sub, submitErr := client.Submit(ctx, &vectorcourt.SubmitRequest{
+			Question: question,
+			Filing:   filing,
+		})
+
+		var raw json.RawMessage
+		if submitErr != nil {
+			// Fallback to sync Consult.
+			var apiErr *vectorcourt.APIError
+			if errors.As(submitErr, &apiErr) && (apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusNotImplemented) {
+				raw, err = client.Consult(ctx, &vectorcourt.ConsultRequest{
+					Question: question,
+					Filing:   filing,
+				})
+				if err != nil {
+					return deliberationResultMsg{err: fmt.Errorf("consult: %w", err)}
+				}
+			} else {
+				return deliberationResultMsg{err: fmt.Errorf("submit: %w", submitErr)}
+			}
+		} else {
+			// Poll until completed.
+			raw, err = pollForVerdict(ctx, client, sub.SubmissionID, sub.CaseID)
+			if err != nil {
+				return deliberationResultMsg{err: fmt.Errorf("poll: %w", err)}
+			}
+		}
+
+		// Stash the verdict.
+		stashVerdict(raw, question)
+
+		// Now inject the original payload into the sidecar session.
+		cwd, err := os.Getwd()
+		if err != nil {
+			return sidecarInjectResultMsg{err: fmt.Errorf("getwd: %w", err)}
+		}
+		sessions, err := sidecar.DiscoverSessions(cwd)
+		if err != nil || len(sessions) == 0 {
+			return sidecarInjectResultMsg{err: fmt.Errorf("no active session")}
+		}
+		if err := sidecar.InjectUserMessage(sessions[0].Path, text); err != nil {
+			return sidecarInjectResultMsg{err: fmt.Errorf("inject: %w", err)}
+		}
+
+		summary := formatVerdictSummary(raw, gate)
+		return sidecarInjectResultMsg{
+			statusMsg: fmt.Sprintf("deliberated + injected: %s", summary),
+		}
+	}
+
+	tickCmd := tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return deliberationTickMsg{}
+	})
+
+	return tea.Batch(submitCmd, tickCmd)
+}
+
+// pollForVerdict polls a submission until completed and returns the verdict.
+func pollForVerdict(ctx context.Context, client *vectorcourt.Client, submissionID, caseID string) (json.RawMessage, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(pollInterval):
+			status, err := client.PollSubmission(ctx, submissionID)
+			if err != nil {
+				continue
+			}
+			switch status.Status {
+			case "completed":
+				if len(status.Verdict) > 0 {
+					return status.Verdict, nil
+				}
+				return client.GetCase(ctx, caseID)
+			case "failed":
+				if status.Error != "" {
+					return nil, fmt.Errorf("deliberation failed: %s", status.Error)
+				}
+				return nil, fmt.Errorf("deliberation failed")
+			}
+		}
+	}
 }
 
 // recordLaunch appends a flight record for the launch and returns its ID.

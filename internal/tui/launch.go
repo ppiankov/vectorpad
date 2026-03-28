@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ppiankov/vectorpad/internal/config"
+	"github.com/ppiankov/vectorpad/internal/sidecar"
 	"github.com/ppiankov/vectorpad/internal/stash"
 	"github.com/ppiankov/vectorpad/internal/vectorcourt"
 )
@@ -96,7 +97,36 @@ func newLaunchOverlay() launchOverlay {
 		action:    nil,
 	})
 
+	// Target 7: Sidecar — direct inject into active Claude Code session.
+	targets = append(targets, launchTarget{
+		key:       "7",
+		name:      "Sidecar (inject)",
+		available: sidecarAvailable(),
+		action:    nil, // handled in executeLaunch
+	})
+
+	// Target 8: Sidecar + VectorCourt — deliberate on framing, then inject.
+	targets = append(targets, launchTarget{
+		key:       "8",
+		name:      "Sidecar + deliberate",
+		available: sidecarAvailable() && vcKeyConfigured(),
+		action:    nil, // handled in executeLaunch
+	})
+
 	return launchOverlay{targets: targets}
+}
+
+// sidecarAvailable returns true if an active Claude Code session exists for the current project.
+func sidecarAvailable() bool {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+	sessions, err := sidecar.DiscoverSessions(cwd)
+	if err != nil {
+		return false
+	}
+	return len(sessions) > 0
 }
 
 // vcKeyConfigured returns true if a VectorCourt API key is set in config.

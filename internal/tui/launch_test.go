@@ -7,8 +7,8 @@ import (
 
 func TestNewLaunchOverlay(t *testing.T) {
 	o := newLaunchOverlay()
-	if len(o.targets) != 6 {
-		t.Errorf("expected 6 targets, got %d", len(o.targets))
+	if len(o.targets) != 8 {
+		t.Errorf("expected 8 targets, got %d", len(o.targets))
 	}
 	// Clipboard is always available.
 	if !o.targets[0].available {
@@ -76,6 +76,16 @@ func TestLaunchOverlaySelectByKey(t *testing.T) {
 	target = o.selectByKey("6")
 	if target == nil || target.name != "VectorCourt" {
 		t.Error("expected VectorCourt for key 6")
+	}
+
+	target = o.selectByKey("7")
+	if target == nil || target.name != "Sidecar (inject)" {
+		t.Error("expected Sidecar (inject) for key 7")
+	}
+
+	target = o.selectByKey("8")
+	if target == nil || target.name != "Sidecar + deliberate" {
+		t.Error("expected Sidecar + deliberate for key 8")
 	}
 
 	target = o.selectByKey("9")
