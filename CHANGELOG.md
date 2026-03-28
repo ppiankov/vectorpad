@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.0] - 2026-03-28
+
+### Added
+- Sidecar mode: compose precision prompts in VectorPad and inject into active agent sessions
+- `internal/sidecar` package: session discovery, JSONL parsing, user entry injection with UUID chain
+- Launch target 7 (Sidecar inject): direct inject into most recent session JSONL
+- Launch target 8 (Sidecar + deliberate): VectorCourt deliberation on framing before inject
+- Two-path flow: DIRECT (compose → inject) and DELIBERATE (compose → VectorCourt → inject)
+
 ## [0.23.2] - 2026-03-26
 
 ### Fixed
